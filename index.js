@@ -1441,54 +1441,6 @@ if (text.startsWith('.wm')) {
             return;
         }
 
-        const { writeFileSync, unlinkSync } = require('fs');
-const { createCanvas } = require('canvas');
-
-module.exports = {
-  name: 'brat',
-  tags: ['fun'],
-  description: 'Membuat stiker teks viral TikTok (aiyayay, baterflay)',
-  usage: '.brat kata-kata',
-  async run(m, { conn, text, command }) {
-    if (!text) return m.reply(`Contoh: .${command} litel baterflay`);
-
-    const lines = text.split(/\s+/); // pisah kata per baris
-
-    const canvas = createCanvas(512, 512);
-    const ctx = canvas.getContext('2d');
-
-    // Background putih
-    ctx.fillStyle = 'white';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Teks hitam
-    ctx.fillStyle = 'black';
-    ctx.font = 'bold 40px Arial';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-
-    // Hitung posisi agar tengah vertikal
-    const lineHeight = 55;
-    const totalHeight = lineHeight * lines.length;
-    let y = (canvas.height - totalHeight) / 2;
-
-    lines.forEach(line => {
-      ctx.fillText(line, 40, y);
-      y += lineHeight;
-    });
-
-    const outputPath = './brat_text.png';
-    writeFileSync(outputPath, canvas.toBuffer());
-
-    await conn.sendImageAsSticker(m.chat, outputPath, m, {
-      packname: 'brat',
-      author: 'StickerBot'
-    });
-
-    unlinkSync(outputPath);
-  }
-};
-
                 // 📢 TAG SEMUA ANGGOTA GRUP
         if (text.trim() === '.tagall') {
             if (!msg.key.remoteJid.endsWith('@g.us')) {
