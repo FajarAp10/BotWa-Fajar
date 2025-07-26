@@ -1,6 +1,6 @@
-FROM node:18-slim
+FROM node:20-slim
 
-# Install dependencies untuk sharp
+# Install lib yang dibutuhkan sharp (kalau pakai)
 RUN apt-get update && apt-get install -y \
     libvips-dev build-essential python3
 
