@@ -634,7 +634,21 @@ if (body.startsWith('.listskor')) {
     return;
   }
 
-  const skorKeys = [...skorUser.keys()];
+  // Hanya bisa digunakan di grup
+  if (!isGroup) {
+    await sock.sendMessage(from, {
+      text: '❌ Perintah ini hanya bisa digunakan di dalam grup.'
+    }, { quoted: msg });
+    return;
+  }
+
+  // Ambil anggota grup
+  const groupMetadata = await sock.groupMetadata(from);
+  const groupMembers = groupMetadata.participants.map(p => p.id);
+
+  // Filter skor yang hanya ada di grup
+  const skorKeys = [...skorUser.keys()].filter(jid => groupMembers.includes(jid));
+
   if (skorKeys.length === 0) {
     await sock.sendMessage(from, {
       text: '📊 Belum ada data skor.'
@@ -642,31 +656,33 @@ if (body.startsWith('.listskor')) {
     return;
   }
 
-  // Pisahkan owner dan user lain
-  const ownerSkor = skorUser.get(OWNER_NUMBER) || 0;
-  const skorLain = skorKeys.filter(j => j !== OWNER_NUMBER);
-  const sortedLain = skorLain.sort((a, b) => skorUser.get(b) - skorUser.get(a));
+  // Urutkan berdasarkan skor tertinggi
+  const sorted = skorKeys.sort((a, b) => skorUser.get(b) - skorUser.get(a));
 
   let teks = `╔══ 📊 *DAFTAR SKOR* 📊 ══╗\n`;
-  teks += `║ 👑 Owner : @${OWNER_NUMBER.split('@')[0]} → *${ownerSkor} poin*\n`;
 
-  if (sortedLain.length === 0) {
-    teks += `║\n║ Belum ada skor.\n`;
-  } else {
-    sortedLain.forEach((jid, i) => {
-      const nomor = jid.split('@')[0];
-      const skor = skorUser.get(jid);
-      teks += `║ ${i + 1}. @${nomor} → *${skor} poin*\n`;
-    });
+  // Tampilkan Owner dulu jika ada di grup
+  if (groupMembers.includes(OWNER_NUMBER)) {
+    const skorOwner = skorUser.get(OWNER_NUMBER) || 0;
+    teks += `║ 👑 Owner : @${OWNER_NUMBER.split('@')[0]} → *${skorOwner} poin*\n`;
+  }
+
+  let count = 1;
+  for (const jid of sorted) {
+    if (jid === OWNER_NUMBER) continue; // Owner sudah ditampilkan di atas
+    const nomor = jid.split('@')[0];
+    const skor = skorUser.get(jid);
+    teks += `║ ${count++}. @${nomor} → *${skor} poin*\n`;
   }
 
   teks += `╚═════════════════════╝`;
 
   await sock.sendMessage(from, {
     text: teks,
-    mentions: [OWNER_NUMBER, ...sortedLain]
+    mentions: [OWNER_NUMBER, ...sorted.filter(jid => jid !== OWNER_NUMBER)]
   }, { quoted: msg });
 }
+
 
 if (body.startsWith('.listvip')) {
   if (!isVIP(sender)) {
@@ -676,11 +692,23 @@ if (body.startsWith('.listvip')) {
     return;
   }
 
-  const allVIP = [...vipList];
+  // Cek hanya di grup
+  if (!isGroup) {
+    await sock.sendMessage(from, {
+      text: '❌ Perintah hanya bisa digunakan di grup.'
+    }, { quoted: msg });
+    return;
+  }
+
+  const groupMembers = participants.map(p => p.id);
+  const allVIP = [...vipList].filter(jid => groupMembers.includes(jid));
   const vipLain = allVIP.filter(v => v !== OWNER_NUMBER);
 
   let teks = `╔══ 🎖️ *DAFTAR VIP* 🎖️ ══╗\n`;
-  teks += `║ 👑 Owner : @${OWNER_NUMBER.split('@')[0]}\n`;
+
+  if (groupMembers.includes(OWNER_NUMBER)) {
+    teks += `║ 👑 Owner : @${OWNER_NUMBER.split('@')[0]}\n`;
+  }
 
   if (vipLain.length === 0) {
     teks += `║\n║ Belum ada VIP.\n`;
@@ -697,7 +725,6 @@ if (body.startsWith('.listvip')) {
     mentions: [OWNER_NUMBER, ...vipLain]
   }, { quoted: msg });
 }
-
 
 if (body.startsWith('.setvip') && isGroup) {
   if (!isVIP(sender)) {
