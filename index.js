@@ -126,7 +126,36 @@ const soalTebakan = [
     { soal: "Aku bisa bersinar tapi bukan lampu. Aku apa?", jawaban: "matahari" },
     { soal: "Aku basah tapi bisa memadamkan api. Aku apa?", jawaban: "air" },
     { soal: "Aku selalu naik tapi tak pernah turun. Aku apa?", jawaban: "harga" },
-    { soal: "Aku berbunyi saat disentuh, punya senar tapi bukan gitar. Aku apa?", jawaban: "biola" }
+    { soal: "Aku berbunyi saat disentuh, punya senar tapi bukan gitar. Aku apa?", jawaban: "biola" },
+    { soal: "Aku bisa duduk tapi bukan orang. Aku apa?", jawaban: "kursi" },
+    { soal: "Aku bisa diinjak tapi tak pernah protes. Aku apa?", jawaban: "sendal" },
+    { soal: "Aku kecil, suka nyedot, bikin gatel. Aku apa?", jawaban: "nyamuk" },
+    { soal: "Aku bulat, sering ditendang. Aku apa?", jawaban: "bola" },
+    { soal: "Aku suka manjat tapi bukan monyet. Aku apa?", jawaban: "kucing" },
+    { soal: "Aku manis, suka dibungkus permen. Aku apa?", jawaban: "gula" },
+    { soal: "Aku di tangan tapi bukan jari. Aku apa?", jawaban: "jam" },
+    { soal: "Aku nyala kalau gelap. Aku apa?", jawaban: "lampu" },
+    { soal: "Aku bisa dibuka, punya gigi. Aku apa?", jawaban: "resleting" },
+    { soal: "Aku berbunyi saat lapar disentuh. Aku apa?", jawaban: "perut" },
+    { soal: "Aku naik turun tapi tetap di tempat. Aku apa?", jawaban: "lift" },
+    { soal: "Aku keras, suka dipakai bangun rumah. Aku apa?", jawaban: "batu" },
+    { soal: "Aku suka terbang tapi bukan burung. Aku apa?", jawaban: "pesawat" },
+    { soal: "Aku putih, dingin, bisa dimakan. Aku apa?", jawaban: "es" },
+    { soal: "Aku kecil, hitam, bikin pedas. Aku apa?", jawaban: "lada" },
+    { soal: "Aku bulat, bisa meletus. Aku apa?", jawaban: "balon" },
+    { soal: "Aku selalu lapar, makan listrik. Aku apa?", jawaban: "hp" },
+    { soal: "Aku bulu tapi bukan bulu mata. Aku apa?", jawaban: "bulu" },
+    { soal: "Aku disetrika biar rapi. Aku apa?", jawaban: "baju" },
+    { soal: "Aku suka jatuh pas galau. Aku apa?", jawaban: "airmata" },
+    { soal: "Aku suka dipegang, kadang dipeluk. Aku apa?", jawaban: "bantal" },
+    { soal: "Aku warnanya kuning, suka digoreng. Aku apa?", jawaban: "pisang" },
+    { soal: "Aku ada angka, bisa jalan. Aku apa?", jawaban: "jam" },
+    { soal: "Aku bening, masuk ke botol. Aku apa?", jawaban: "air" },
+    { soal: "Aku ditulis di kertas, bisa bikin senyum. Aku apa?", jawaban: "puisi" },
+    { soal: "Aku kering tapi bisa basah. Aku apa?", jawaban: "handuk" },
+    { soal: "Aku kecil, putih, bikin senyum cerah. Aku apa?", jawaban: "gigi" },
+    { soal: "Aku sering jatuh di malam hari. Aku apa?", jawaban: "embun" },
+    { soal: "Aku bisa mencium tapi tak punya hidung. Aku apa?", jawaban: "bunga" }
 ];
 
 const sesiTebakan = new Map(); // key: pengirim, value: { jawaban: string, timeout: TimeoutObject }
@@ -161,7 +190,27 @@ const soalKuis = [
     { soal: "Bentuk bumi adalah?", pilihan: ["A. Datar", "B. Bulat", "C. Kotak", "D. Segitiga"], jawaban: "B" },
     { soal: "Pulau terbesar di Indonesia?", pilihan: ["A. Bali", "B. Jawa", "C. Kalimantan", "D. Sumatra"], jawaban: "C" },
     { soal: "Hewan berkaki delapan?", pilihan: ["A. Ular", "B. Semut", "C. Laba-laba", "D. Kupu-kupu"], jawaban: "C" },
-    { soal: "Planet terdekat ke matahari?", pilihan: ["A. Mars", "B. Bumi", "C. Venus", "D. Merkurius"], jawaban: "D" }
+    { soal: "Planet terdekat ke matahari?", pilihan: ["A. Mars", "B. Bumi", "C. Venus", "D. Merkurius"], jawaban: "D" },
+    { soal: "Apa hasil dari (5 + 3) x 2?", pilihan: ["A. 10", "B. 16", "C. 13", "D. 18"], jawaban: "B" },
+    { soal: "Binatang apa yang selalu benar?", pilihan: ["A. Ayam", "B. Kucing", "C. Benar-benar", "D. Gajah"], jawaban: "C" },
+    { soal: "Berapa sisi segi lima?", pilihan: ["A. 4", "B. 5", "C. 6", "D. 8"], jawaban: "B" },
+    { soal: "Angka 0 dibagi dengan angka berapapun hasilnya?", pilihan: ["A. Nol", "B. Satu", "C. Tak hingga", "D. Tidak bisa"], jawaban: "A" },
+    { soal: "Organ apa yang berfungsi menyaring darah?", pilihan: ["A. Paru-paru", "B. Ginjal", "C. Jantung", "D. Otak"], jawaban: "B" },
+    { soal: "Tahun kabisat terjadi setiap ...?", pilihan: ["A. 2 tahun", "B. 3 tahun", "C. 4 tahun", "D. 5 tahun"], jawaban: "C" },
+    { soal: "Apa lawan kata dari konveksi?", pilihan: ["A. Radiasi", "B. Evaporasi", "C. Kondensasi", "D. Konduksi"], jawaban: "D" },
+    { soal: "Benda apa yang jika dibalik tetap bisa dipakai membaca?", pilihan: ["A. Buku", "B. Koran", "C. Komik", "D. Majalah"], jawaban: "B" },
+    { soal: "Apa ibukota dari negara Islandia?", pilihan: ["A. Helsinki", "B. Reykjavik", "C. Oslo", "D. Nuuk"], jawaban: "B" },
+    { soal: "Jika hari ini Rabu, maka 9 hari lagi adalah?", pilihan: ["A. Jumat", "B. Sabtu", "C. Minggu", "D. Jumat"], jawaban: "C" },
+    { soal: "Jumlah huruf pada kata 'Indonesia' adalah?", pilihan: ["A. 7", "B. 8", "C. 9", "D. 10"], jawaban: "C" },
+    { soal: "Berapa liter dalam 1 galon (standar Indonesia)?", pilihan: ["A. 15", "B. 19", "C. 20", "D. 25"], jawaban: "B" },
+    { soal: "Apa simbol kimia dari Emas?", pilihan: ["A. Ag", "B. Au", "C. Fe", "D. Cu"], jawaban: "B" },
+    { soal: "Apa nama bulan di antara Juli dan September?", pilihan: ["A. Juni", "B. Agustus", "C. Oktober", "D. Mei"], jawaban: "B" },
+    { soal: "Hewan apa yang bisa hidup di darat dan air?", pilihan: ["A. Ikan", "B. Ular", "C. Katak", "D. Burung"], jawaban: "C" },
+    { soal: "Jika kamu punya 3 apel dan kamu makan 1, berapa sisa?", pilihan: ["A. 2", "B. 3", "C. 1", "D. 0"], jawaban: "A" },
+    { soal: "Apa warna sekunder dari merah dan kuning?", pilihan: ["A. Hijau", "B. Oranye", "C. Ungu", "D. Biru"], jawaban: "B" },
+    { soal: "Lagu 'Indonesia Raya' diciptakan oleh?", pilihan: ["A. WR Supratman", "B. Ismail Marzuki", "C. Soe Hok Gie", "D. Chairil Anwar"], jawaban: "A" },
+    { soal: "Berapa jumlah huruf vokal di kata 'Sekolah'?", pilihan: ["A. 2", "B. 3", "C. 4", "D. 5"], jawaban: "B" },
+    { soal: "Apa kepanjangan dari CPU?", pilihan: ["A. Central Print Unit", "B. Core Processing Unit", "C. Central Processing Unit", "D. Control Power Unit"], jawaban: "C" }
 ];
 
 const sesiKuis = new Map(); // key: pengirim, value: { jawaban: string, timeout: TimeoutObject }
@@ -178,7 +227,17 @@ const soalSusunKata = [
     "pasar", "hotel", "bioskop", "kantor", "bank", "toko", "warung",
     "pagi", "siang", "malam", "subuh", "senja", "fajar", "surya",
     "berlari", "berenang", "makan", "tidur", "mandi", "minum", "menangis",
-    "senyum", "tertawa", "menulis", "membaca", "berhitung", "menggambar"
+    "senyum", "tertawa", "menulis", "membaca", "berhitung", "menggambar",
+    "peluru", "pisang", "jeruk", "semangka", "apel", "durian", "nanas",
+    "televisi", "kamera", "laptop", "printer", "mouse", "keyboard", "monitor",
+    "jam", "meja", "kursi", "lemari", "jendela", "pintu", "atap", "dinding",
+    "jalan", "mobil", "motor", "sepeda", "kereta", "pesawat", "kapal",
+    "dompet", "tas", "buku", "pena", "penggaris", "kalkulator", "kertas",
+    "jaket", "baju", "celana", "sepatu", "sandal", "kaos", "topi",
+    "telinga", "mata", "hidung", "mulut", "tangan", "kaki", "perut", "kepala",
+    "bola", "raket", "gawang", "wasit", "gol", "tim", "lapangan", "penonton",
+    "kamera", "drama", "film", "musik", "lagu", "penyanyi", "gitar", "piano",
+    "surat", "email", "pesan", "video", "foto", "data", "dokumen"
 ];
 
 const sesiSusunKata = new Map(); // key: pengirim, value: { jawaban, timeout }
@@ -255,6 +314,126 @@ const soalFamily100 = [
   {
     pertanyaan: "Sesuatu yang panas?",
     jawaban: ["matahari", "api", "air panas", "kompor", "mie rebus"]
+  },
+  {
+    pertanyaan: "Hewan yang hidup di darat?",
+    jawaban: ["kucing", "anjing", "sapi", "kambing", "gajah"]
+  },
+  {
+    pertanyaan: "Sesuatu yang dipakai di kepala?",
+    jawaban: ["topi", "helm", "bando", "kerudung", "kacamata"]
+  },
+  {
+    pertanyaan: "Minuman yang disajikan dingin?",
+    jawaban: ["es teh", "jus", "es kopi", "air", "soda"]
+  },
+  {
+    pertanyaan: "Buah yang berwarna hijau?",
+    jawaban: ["melon", "apel", "anggur", "alpukat", "pir"]
+  },
+  {
+    pertanyaan: "Sesuatu yang dilakukan saat bangun tidur?",
+    jawaban: ["ngucek mata", "minum", "mandi", "doa", "ngecek hp"]
+  },
+  {
+    pertanyaan: "Sesuatu yang ada di tas sekolah?",
+    jawaban: ["buku", "pulpen", "penghapus", "bekal", "pensil"]
+  },
+  {
+    pertanyaan: "Sesuatu yang ada di langit?",
+    jawaban: ["matahari", "bulan", "bintang", "awan", "pesawat"]
+  },
+  {
+    pertanyaan: "Sesuatu yang biasa dipakai saat olahraga?",
+    jawaban: ["sepatu", "kaos", "celana", "headband", "raket"]
+  },
+  {
+    pertanyaan: "Benda yang bisa mengeluarkan suara?",
+    jawaban: ["radio", "hp", "tv", "speaker", "alarm"]
+  },
+  {
+    pertanyaan: "Sesuatu yang bisa dikunci?",
+    jawaban: ["pintu", "lemari", "motor", "mobil", "hp"]
+  },
+  {
+    pertanyaan: "Hewan yang hidup di kebun binatang?",
+    jawaban: ["singa", "harimau", "gajah", "zebra", "unta"]
+  },
+  {
+    pertanyaan: "Alat yang digunakan untuk membersihkan?",
+    jawaban: ["sapu", "pel", "lap", "vacuum", "kain"]
+  },
+  {
+    pertanyaan: "Sesuatu yang sering dipegang saat nonton TV?",
+    jawaban: ["remote", "bantal", "snack", "minuman", "selimut"]
+  },
+  {
+    pertanyaan: "Sesuatu yang dipakai di kaki?",
+    jawaban: ["sepatu", "sandal", "kaos kaki", "sepatu roda", "sepatu bola"]
+  },
+  {
+    pertanyaan: "Sesuatu yang sering ditemukan di meja belajar?",
+    jawaban: ["lampu", "buku", "pulpen", "penghapus", "catatan"]
+  },
+  {
+    pertanyaan: "Sesuatu yang bisa dipotong?",
+    jawaban: ["kertas", "rambut", "baju", "kue", "sayur"]
+  },
+  {
+    pertanyaan: "Sesuatu yang bisa dibuka dan ditutup?",
+    jawaban: ["pintu", "jendela", "botol", "tas", "hp"]
+  },
+  {
+    pertanyaan: "Sesuatu yang dipakai saat tidur?",
+    jawaban: ["bantal", "selimut", "sprei", "piyama", "guling"]
+  },
+  {
+    pertanyaan: "Sesuatu yang bisa dikupas?",
+    jawaban: ["pisang", "jeruk", "mangga", "kentang", "bawang"]
+  },
+  {
+    pertanyaan: "Sesuatu yang bisa ditulis?",
+    jawaban: ["buku", "kertas", "papan", "note", "catatan"]
+  },
+  {
+    pertanyaan: "Tempat yang ramai saat liburan?",
+    jawaban: ["pantai", "mall", "kebun binatang", "bioskop", "taman"]
+  },
+  {
+    pertanyaan: "Sesuatu yang bergerak cepat?",
+    jawaban: ["mobil", "motor", "pesawat", "kucing", "peluru"]
+  },
+  {
+    pertanyaan: "Sesuatu yang memiliki roda?",
+    jawaban: ["motor", "mobil", "sepeda", "gerobak", "skateboard"]
+  },
+  {
+    pertanyaan: "Sesuatu yang bisa dipeluk?",
+    jawaban: ["bantal", "boneka", "orang", "guling", "hewan"]
+  },
+  {
+    pertanyaan: "Sesuatu yang biasa diwarnai?",
+    jawaban: ["gambar", "tembok", "kertas", "baju", "kuku"]
+  },
+  {
+    pertanyaan: "Alat yang digunakan untuk makan?",
+    jawaban: ["sendok", "garpu", "tangan", "sumpit", "piring"]
+  },
+  {
+    pertanyaan: "Sesuatu yang bisa naik turun?",
+    jawaban: ["lift", "tangga", "berat badan", "kurs", "panas"]
+  },
+  {
+    pertanyaan: "Sesuatu yang bisa dimakan mentah?",
+    jawaban: ["salad", "buah", "timun", "wortel", "sushi"]
+  },
+  {
+    pertanyaan: "Sesuatu yang bisa dicium baunya?",
+    jawaban: ["bunga", "parfum", "makanan", "bensin", "kotoran"]
+  },
+  {
+    pertanyaan: "Sesuatu yang digunakan untuk menutup?",
+    jawaban: ["pintu", "tutup", "penutup", "masker", "selimut"]
   },
   {
     pertanyaan: "Hewan yang bisa dijadikan peliharaan?",
