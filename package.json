@@ -19,7 +19,6 @@
     "node-fetch": "^2.7.0",
     "qrcode-terminal": "^0.12.0",
     "sharp": "^0.32.6",
-    "text-to-image": "^7.0.1",
     "wa-sticker-formatter": "^4.4.4"
   },
   "overrides": {

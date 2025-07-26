@@ -142,32 +142,30 @@ const truthList = [
 ];
 
 const dareList = [
-  "Ganti bio wa 'Aku suka agus' dan biarkan 30 menit!",
+  "Ganti bio wa *Aku suka agus* dan biarkan 30 menit!",
   "VN 5 detik dengan suara ketawa paling serem versimu!",
   "Ganti foto profil jadi wajah temen random selama 15 menit!",
   "Kirim stiker paling cringe yang kamu punya!",
-  "VN nyanyikan lagu 'Balonku Ada Lima' tapi dengan huruf vokal i!",
-  "Chat mantan dan bilang 'aku masih sayang kamu' (screenshot ya!)",
+  "VN nyanyikan lagu *Balonku Ada Lima* tapi dengan huruf vokal i!",
+  "Chat mantan dan bilang *aku masih sayang kamu* (screenshot ya!)",
   "Pake filter jelek di kamera dan kirim fotonya ke sini!",
-  "Ketik 'Aku ingin menikah tahun ini' di status WhatsApp!",
+  "Ketik *Aku ingin menikah tahun ini* di status WhatsApp!",
   "Rekam suara bilang 'Aku adalah budak cinta' dan kirim ke sini!",
-  "Chat orang random dan tanya 'Kamu percaya alien?'",
-  "Ketik 'Aku lagi pengen dimanja' di grup keluarga!",
-  "Bilang ke orang random 'Kamu cakep deh'",
-  "Telepon kontak terakhir di WA dan bilang 'Aku suka kamu!'",
-  "Ganti nama kontak pacar jadi 'Calon Suami/Istri'",
-  "Ketik 'Aku pengen peluk seseorang hari ini' di status WA",
+  "Chat orang random dan tanya *Kamu percaya alien?*",
+  "Ketik *Aku lagi pengen dimanja* di grup teman!",
+  "Bilang ke orang random *Kamu cakep deh*",
+  "Telepon kontak terakhir di WA dan bilang *Aku suka kamu!*",
+  "Ganti nama kontak pacar jadi *Calon Suami/Istri*",
+  "Ketik *Aku pengen peluk seseorang hari ini* di status WA",
   "Ceritakan rahasia tergokil kamu ke grup ini!",
   "Berikan pujian ke 3 orang di grup ini, sekarang juga!",
-  "VN ngomong 'aku ngaku salah' sambil pura-pura nangis",
+  "VN ngomong *aku ngaku salah* sambil pura-pura nangis",
   "VN ngomong dengan suara genit: 'Aduh om, jangan gitu dong'",
   "Kirim selfie dengan gaya paling kocak!",
   "VN nyebut nama crush kamu 5x nonstop!",
-  "Tanya ke orang tua 'Boleh nikah umur berapa ya?' lalu screenshot jawabannya",
-  "Ketik 'Aku baper sama seseorang di sini' dan jangan bilang siapa!",
-  "Ketik 'Pengen dipeluk' ke nomor orang random dikontakmu!",
+  "Tanya ke orang tua *Boleh nikah umur berapa ya?* lalu screenshot jawabannya",
+  "Ketik *Pengen dipeluk* ke nomor orang random dikontakmu!",
   "Kirim foto tampang bangun tidur ke sini tanpa edit!",
-  "Chat ortu: 'Aku mau nikah muda, boleh ya?' dan kirim screenshot jawabannya!",
   "Kirim emoji 🍑💦 ke orang random dan screenshot reaksinya!",
   "Kirim video kamu joget lagu TikTok yang lagi viral!"
 ];
@@ -1459,6 +1457,7 @@ if (text.startsWith('.wm')) {
 }
 
 
+
         // 🧊 STIKER
         if (text.trim().toLowerCase() === '.stiker') {
             console.log(`📥 Permintaan stiker dari ${from}...`);
@@ -2012,35 +2011,6 @@ if (body === '.dare') {
   }, { quoted: msg });
 }
 
-const textToImage = require('text-to-image');
-
-if (budy.startsWith('.brat ')) {
-  const kata = budy.slice(6).trim();
-  if (!kata) return sock.sendMessage(from, { text: '❌ Masukkan teks!\nContoh: *.brat kamu siapa?*' }, { quoted: msg });
-
-  const imgPath = './brat-text.png';
-
-  await textToImage.generate(kata, {
-    maxWidth: 400,
-    fontSize: 32,
-    fontFamily: 'Arial',
-    lineHeight: 40,
-    margin: 10,
-    bgColor: 'white',
-    textColor: 'black',
-    output: imgPath,
-  });
-
-  const sticker = new Sticker(imgPath, {
-    pack: 'BotWa',
-    author: 'Jarr',
-    type: 'default',
-    categories: ['🤖'],
-  });
-
-  const buffer = await sticker.toBuffer();
-  await sock.sendMessage(from, { sticker: buffer }, { quoted: msg });
-}
 
 
 if (text.trim() === '.info') {
@@ -2086,6 +2056,8 @@ if (text.trim() === '.menu') {
 │ • .kuis → Kuis pilihan ganda
 │ • .suit → Main suit lawan teman
 │ • .judi → Tebak ganjil / genap
+│ • .truth → Jawab jujur
+│ • .dare → Lakukan tantangan
 │ • .tebak-aku → Tebakan lucu
 │ • .susunkata → Susun huruf
 │ • .family100 → Jawaban terbanyak
