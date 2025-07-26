@@ -655,6 +655,41 @@ if (body.startsWith('.listvip')) {
   }, { quoted: msg });
 }
 
+if (body.startsWith('.listskor')) {
+  if (!isVIP(sender)) {
+    await sock.sendMessage(from, {
+      text: '❌ Perintah hanya bisa digunakan *Owner* dan *Vip*.'
+    }, { quoted: msg });
+    return;
+  }
+
+  const skorKeys = [...skorUser.keys()];
+  if (skorKeys.length === 0) {
+    await sock.sendMessage(from, {
+      text: '📊 Belum ada data skor tersimpan.'
+    }, { quoted: msg });
+    return;
+  }
+
+  // Urutkan berdasarkan skor tertinggi
+  const sorted = skorKeys.sort((a, b) => skorUser.get(b) - skorUser.get(a));
+
+  let teks = `╔══ 📊 *DAFTAR SKOR* 📊 ══╗\n`;
+
+  sorted.forEach((jid, i) => {
+    const nomor = jid.split('@')[0];
+    const skor = skorUser.get(jid);
+    const isOwner = jid === OWNER_NUMBER;
+    teks += `║ ${i + 1}. ${isOwner ? '👑' : ''}@${nomor} → *${skor} poin*\n`;
+  });
+
+  teks += `╚═════════════════════╝`;
+
+  await sock.sendMessage(from, {
+    text: teks,
+    mentions: sorted
+  }, { quoted: msg });
+}
 
 if (body.startsWith('.setvip') && isGroup) {
   if (!isVIP(sender)) {
