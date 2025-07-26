@@ -1959,7 +1959,8 @@ if (text.trim() === '.info') {
     return;
 }
 
- if (text.trim() === '.menu') {
+
+if (text.trim() === '.menu') {
     const waktu = new Date();
     const tanggal = waktu.toLocaleDateString('id-ID', {
         weekday: 'long',
@@ -1971,67 +1972,73 @@ if (text.trim() === '.info') {
     await sock.sendMessage(from, {
         text: `╭─〔 *🤖 BOT JARR MENU* 〕─╮
 │
-├ 🎮 *Game*
-│ • .kuis  → Kuis pilihan ganda
+├ 🎮 *Game* 
+│ • .kuis → Kuis pilihan ganda
 │ • .suit → Main suit lawan teman
-│ • .judi  → Tebak ganjil / genap
-│ • .tebak-aku  → Tebakan lucu
-│ • .susunkata  → Susun huruf
-│ • .family100  → Jawaban terbanyak
+│ • .judi → Tebak ganjil / genap
+│ • .tebak-aku → Tebakan lucu
+│ • .susunkata → Susun huruf
+│ • .family100 → Jawaban terbanyak
 │
 ├ 🏳️‍🌈 *Fitur Lucu*
-│ • .gay @user  → Seberapa gay?
+│ • .gay @user → Seberapa gay?
 │ • .lesbi @user → Seberapa lesbi?
 │ • .cantik @user → Seberapa cantik?
 │ • .ganteng @user → Seberapa ganteng?
-│ • .jodoh @user @user → Jodoh sayang
+│ • .jodoh @user @user → Cocoklogi cinta
 │
 ├ 🧠 *AI Assistant*
 │ • .ai <pertanyaan> → Tanya ke AI
 │
 ├ 🖼️ *Media*
-│ • .stiker   → Ubah gambar jadi stiker
-│ • .dwfoto   → Unduh foto sekali lihat
-│ • .dwvideo  → Unduh video sekali lihat
+│ • .stiker → Ubah gambar jadi stiker
+│ • .dwfoto → Unduh foto sekali lihat
+│ • .dwvideo → Unduh video sekali lihat
 │
 ├ 🎥 *TikTok Tools*
-│ • .ttmp3 <link>    → Unduh mp3 tiktok
-│ • .wm <link>    → Video tanpa watermark
+│ • .ttmp3 <link> → Unduh mp3 TikTok
+│ • .wm <link> → Unduh tanpa watermark
 │
 ├ 👥 *Fitur Grup*
-│ • .tagall   → Tag semua member
-│ • .kick @user  → Kick user (VIP)
-│ • .mute @user   → Mute user (VIP)
-│ • .unmute @user  → Buka mute (VIP)
-│
-├ 👑 *VIP Control*
-│ • .setvip @user → Jadikan user VIP
-│ • .unsetvip @user → Cabut status VIP 
-│ • .listvip → Melihat list VIP
+│ • .tagall → Mention semua member
 │
 ├ 📊 *Skor Game*
-│ • .skor  → Lihat skor kamu
+│ • .skor → Lihat skor kamu
 │ • .kirimskor → Kirim skor ke teman
-│ • .setskor → Atur skor (VIP)
-│
-├ ⚙️ *Bot Control*
-│ • .on → Aktifkan bot (Owner only)
-│ • .off → Nonaktifkan bot (Owner only)
 │
 ├ 📋 *Info*
-│ • .beli  → Beli VIP
-│ • .info  → Info bot & owner
-│ • .menu  → Tampilkan menu ini
+│ • .beli → Beli VIP
+│ • .info → Info bot & owner
+│ • .menu → Tampilkan menu ini
 │
 ╰─📅 ${tanggal}
-     👑 Owner: @${OWNER_NUMBER?.split('@')[0] || '628xxxx'}
-`
-        ,
+
+╭─〔 *🔐 FITUR VIP / OWNER* 〕─╮
+│
+├ 👥 *Grup VIP*
+│ • .kick @user → Kick user
+│ • .mute @user → Mute user
+│ • .unmute @user → Buka mute
+│
+├ 📊 *Skor Khusus*
+│ • .setskor → Atur skor user
+│
+├ 👑 *VIP Control*
+│ • .setvip @user → Jadikan VIP
+│ • .unsetvip @user → Cabut VIP
+│ • .listvip → Daftar VIP
+│ • .listskor → Daftar SKOR
+│
+├ ⚙️ *Bot Control* (Owner Only)
+│ • .on → Aktifkan bot
+│ • .off → Nonaktifkan bot
+│
+╰─👑 Owner: @${OWNER_NUMBER?.split('@')[0] || '6283836348226'}
+        `,
         mentions: [OWNER_NUMBER]
     });
     return;
 }
-
 
 
 // 🤖 AI Chat pakai .ai
