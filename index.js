@@ -625,6 +625,49 @@ if (mutedUsers.has(sender)) {
 
     return;
 }
+
+if (body.startsWith('.listskor')) {
+  if (!isVIP(sender)) {
+    await sock.sendMessage(from, {
+      text: '❌ Perintah hanya bisa digunakan *Owner* dan *Vip*.'
+    }, { quoted: msg });
+    return;
+  }
+
+  const skorKeys = [...skorUser.keys()];
+  if (skorKeys.length === 0) {
+    await sock.sendMessage(from, {
+      text: '📊 Belum ada data skor.'
+    }, { quoted: msg });
+    return;
+  }
+
+  // Pisahkan owner dan user lain
+  const ownerSkor = skorUser.get(OWNER_NUMBER) || 0;
+  const skorLain = skorKeys.filter(j => j !== OWNER_NUMBER);
+  const sortedLain = skorLain.sort((a, b) => skorUser.get(b) - skorUser.get(a));
+
+  let teks = `╔══ 📊 *DAFTAR SKOR* 📊 ══╗\n`;
+  teks += `║ 👑 Owner : @${OWNER_NUMBER.split('@')[0]} → *${ownerSkor} poin*\n`;
+
+  if (sortedLain.length === 0) {
+    teks += `║\n║ Belum ada skor.\n`;
+  } else {
+    sortedLain.forEach((jid, i) => {
+      const nomor = jid.split('@')[0];
+      const skor = skorUser.get(jid);
+      teks += `║ ${i + 1}. @${nomor} → *${skor} poin*\n`;
+    });
+  }
+
+  teks += `╚═════════════════════╝`;
+
+  await sock.sendMessage(from, {
+    text: teks,
+    mentions: [OWNER_NUMBER, ...sortedLain]
+  }, { quoted: msg });
+}
+
 if (body.startsWith('.listvip')) {
   if (!isVIP(sender)) {
     await sock.sendMessage(from, {
@@ -655,41 +698,6 @@ if (body.startsWith('.listvip')) {
   }, { quoted: msg });
 }
 
-if (body.startsWith('.listskor')) {
-  if (!isVIP(sender)) {
-    await sock.sendMessage(from, {
-      text: '❌ Perintah hanya bisa digunakan *Owner* dan *Vip*.'
-    }, { quoted: msg });
-    return;
-  }
-
-  const skorKeys = [...skorUser.keys()];
-  if (skorKeys.length === 0) {
-    await sock.sendMessage(from, {
-      text: '📊 Belum ada data skor tersimpan.'
-    }, { quoted: msg });
-    return;
-  }
-
-  // Urutkan berdasarkan skor tertinggi
-  const sorted = skorKeys.sort((a, b) => skorUser.get(b) - skorUser.get(a));
-
-  let teks = `╔══ 📊 *DAFTAR SKOR* 📊 ══╗\n`;
-
-  sorted.forEach((jid, i) => {
-    const nomor = jid.split('@')[0];
-    const skor = skorUser.get(jid);
-    const isOwner = jid === OWNER_NUMBER;
-    teks += `║ ${i + 1}. ${isOwner ? '👑' : ''}@${nomor} → *${skor} poin*\n`;
-  });
-
-  teks += `╚═════════════════════╝`;
-
-  await sock.sendMessage(from, {
-    text: teks,
-    mentions: sorted
-  }, { quoted: msg });
-}
 
 if (body.startsWith('.setvip') && isGroup) {
   if (!isVIP(sender)) {
