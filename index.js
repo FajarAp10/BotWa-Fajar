@@ -9,7 +9,6 @@ const { Boom } = require('@hapi/boom');
 const qrcode = require('qrcode-terminal');
 const { Sticker } = require('wa-sticker-formatter');
 const { exec } = require('child_process');
-const { createCanvas } = require('canvas');
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
@@ -2013,45 +2012,35 @@ if (body === '.dare') {
   }, { quoted: msg });
 }
 
+const textToImage = require('text-to-image');
+
 if (budy.startsWith('.brat ')) {
-  const text = budy.slice(6).trim();
-  if (!text) return sock.sendMessage(from, { text: '❌ Masukkan teks setelah .brat' }, { quoted: m });
+  const kata = budy.slice(6).trim();
+  if (!kata) return sock.sendMessage(from, { text: '❌ Masukkan teks!\nContoh: *.brat kamu siapa?*' }, { quoted: msg });
 
-  const { createCanvas, loadImage } = require('canvas');
-  const canvas = createCanvas(512, 512);
-  const ctx = canvas.getContext('2d');
+  const imgPath = './brat-text.png';
 
-  // Background putih
-  ctx.fillStyle = '#FFFFFF';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  // Teks hitam
-  ctx.fillStyle = '#000000';
-  ctx.font = 'bold 40px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(text, canvas.width / 2, canvas.height / 2);
-
-  // Simpan gambar
-  const outputPath = './brat_text.png';
-  const buffer = canvas.toBuffer('image/png');
-  fs.writeFileSync(outputPath, buffer);
-
-  // Ubah jadi stiker
-  const sticker = new Sticker(outputPath, {
-    pack: 'BratSticker',
-    author: 'BotWA',
-    type: 'FULL',
-    quality: 50
+  await textToImage.generate(kata, {
+    maxWidth: 400,
+    fontSize: 32,
+    fontFamily: 'Arial',
+    lineHeight: 40,
+    margin: 10,
+    bgColor: 'white',
+    textColor: 'black',
+    output: imgPath,
   });
 
-  const stickerBuffer = await sticker.toBuffer();
-  await sock.sendMessage(from, { sticker: stickerBuffer }, { quoted: m });
+  const sticker = new Sticker(imgPath, {
+    pack: 'BotWa',
+    author: 'Jarr',
+    type: 'default',
+    categories: ['🤖'],
+  });
 
-  // Hapus file
-  fs.unlinkSync(outputPath);
+  const buffer = await sticker.toBuffer();
+  await sock.sendMessage(from, { sticker: buffer }, { quoted: msg });
 }
-
 
 
 if (text.trim() === '.info') {
