@@ -111,6 +111,23 @@ async function getAIReply(text) {
     }
 }
 
+const truthList = [
+  "Apa rahasia terbesar yang kamu sembunyikan dari teman-temanmu?",
+  "Siapa orang yang paling kamu sukai diam-diam?",
+  "Pernah bohong ke orang tua? Tentang apa?",
+  "Kapan terakhir kamu nangis diam-diam?",
+  "Siapa orang yang paling kamu rindukan saat ini?"
+];
+
+const dareList = [
+  "Screenshot chat terakhir dan kirim ke grup ini!",
+  "Ganti nama jadi 'Saya Bodoh' selama 10 menit!",
+  "Kirim pesan 'Aku suka kamu' ke orang random di kontakmu!",
+  "Rekam suara bilang 'aku ngaku kalah' lalu kirim ke sini!",
+  "Lagu favorit kamu, nyanyikan sekarang di VN!"
+];
+
+
 // ================== TEBAK-AKU CONFIG ==================
 const soalTebakan = [
     { soal: "Aku bisa dibuka tapi tak bisa ditutup. Aku apa?", jawaban: "telur" },
@@ -1930,6 +1947,24 @@ ${komentar}
         text: hasil,
         mentions: [user1, user2]
     }, { quoted: msg });
+}
+
+if (budy === '.truth') {
+  const truthText = truthList[Math.floor(Math.random() * truthList.length)];
+  const imagePath = './truthordare.png';
+  await sock.sendMessage(from, {
+    image: { url: imagePath },
+    caption: `🎯 *Truth Challenge*\n\n${truthText}`
+  }, { quoted: m });
+}
+
+if (budy === '.dare') {
+  const dareText = dareList[Math.floor(Math.random() * dareList.length)];
+  const imagePath = './truthordare.png';
+  await sock.sendMessage(from, {
+    image: { url: imagePath },
+    caption: `🔥 *Dare Challenge*\n\n${dareText}`
+  }, { quoted: m });
 }
 
 
