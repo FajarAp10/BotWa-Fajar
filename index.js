@@ -9,9 +9,12 @@ const { Boom } = require('@hapi/boom');
 const qrcode = require('qrcode-terminal');
 const { Sticker } = require('wa-sticker-formatter');
 const { exec } = require('child_process');
+const { createCanvas } = require('canvas');
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
+
+
 
 // Gunakan auth tunggal agar file login bisa disimpan di GitHub/Railway
 
@@ -112,19 +115,62 @@ async function getAIReply(text) {
 }
 
 const truthList = [
-  "Apa rahasia terbesar yang kamu sembunyikan dari teman-temanmu?",
-  "Siapa orang yang paling kamu sukai diam-diam?",
-  "Pernah bohong ke orang tua? Tentang apa?",
-  "Kapan terakhir kamu nangis diam-diam?",
-  "Siapa orang yang paling kamu rindukan saat ini?"
+  "Apa hal paling memalukan yang pernah kamu lakukan di depan umum?",
+  "Siapa nama mantan yang masih suka kamu stalk?",
+  "Kalau bisa balikan sama 1 orang, siapa yang bakal kamu pilih?",
+  "Pernah pura-pura sakit biar gak sekolah? Ceritakan alasannya.",
+  "Siapa teman yang paling ngeselin tapi kamu gak bisa jauhin?",
+  "Pernah suka sama pacar orang? Ceritakan!",
+  "Kalau kamu punya kekuatan gaib, kamu bakal pakai buat apa?",
+  "Pernah curi-curi pandang siapa? Jelaskan.",
+  "Pernah suka sama guru/dosen? Siapa?",
+  "Hal paling gila yang pernah kamu lakukan demi cinta?",
+  "Kalau disuruh jujur, siapa yang paling kamu benci diam-diam?",
+  "Pernah diselingkuhin? Atau justru kamu yang selingkuh?",
+  "Kapan terakhir kamu pura-pura bahagia?",
+  "Siapa nama kontak yang kamu samarkan di HP karena malu?",
+  "Kalau bisa ubah 1 hal dari masa lalu, apa itu?",
+  "Kamu pilih cinta atau uang? Jelaskan kenapa.",
+  "Pernah ciuman? Sama siapa dan di mana?",
+  "Kalau bisa hilangin 1 orang dari hidupmu, siapa?",
+  "Apa kebohongan terbesar yang belum ketahuan sampai sekarang?",
+  "Hal tergila yang pengen kamu coba tapi belum berani?",
+  "Siapa orang yang paling kamu pengen ajak chat sekarang?",
+  "Apa hal yang paling kamu insecure-in dari dirimu?",
+  "Kamu pernah punya pikiran jahat? Tentang apa?",
+  "Siapa yang menurutmu paling fake tapi akrab sama kamu?",
+  "Apa ketakutan terbesar kamu yang gak pernah kamu bilang ke siapa-siapa?"
 ];
 
 const dareList = [
-  "Screenshot chat terakhir dan kirim ke grup ini!",
-  "Ganti nama jadi 'Saya Bodoh' selama 10 menit!",
-  "Kirim pesan 'Aku suka kamu' ke orang random di kontakmu!",
-  "Rekam suara bilang 'aku ngaku kalah' lalu kirim ke sini!",
-  "Lagu favorit kamu, nyanyikan sekarang di VN!"
+  "Ganti bio wa 'Aku suka agus' dan biarkan 30 menit!",
+  "VN 5 detik dengan suara ketawa paling serem versimu!",
+  "Ganti foto profil jadi wajah temen random selama 15 menit!",
+  "Kirim stiker paling cringe yang kamu punya!",
+  "VN nyanyikan lagu 'Balonku Ada Lima' tapi dengan huruf vokal i!",
+  "Chat mantan dan bilang 'aku masih sayang kamu' (screenshot ya!)",
+  "Pake filter jelek di kamera dan kirim fotonya ke sini!",
+  "Ketik 'Aku ingin menikah tahun ini' di status WhatsApp!",
+  "Rekam suara bilang 'Aku adalah budak cinta' dan kirim ke sini!",
+  "Chat orang random dan tanya 'Kamu percaya alien?'",
+  "Ketik 'Aku lagi pengen dimanja' di grup keluarga!",
+  "Bilang ke orang random 'Kamu cakep deh'",
+  "Telepon kontak terakhir di WA dan bilang 'Aku suka kamu!'",
+  "Ganti nama kontak pacar jadi 'Calon Suami/Istri'",
+  "Ketik 'Aku pengen peluk seseorang hari ini' di status WA",
+  "Ceritakan rahasia tergokil kamu ke grup ini!",
+  "Berikan pujian ke 3 orang di grup ini, sekarang juga!",
+  "VN ngomong 'aku ngaku salah' sambil pura-pura nangis",
+  "VN ngomong dengan suara genit: 'Aduh om, jangan gitu dong'",
+  "Kirim selfie dengan gaya paling kocak!",
+  "VN nyebut nama crush kamu 5x nonstop!",
+  "Tanya ke orang tua 'Boleh nikah umur berapa ya?' lalu screenshot jawabannya",
+  "Ketik 'Aku baper sama seseorang di sini' dan jangan bilang siapa!",
+  "Ketik 'Pengen dipeluk' ke nomor orang random dikontakmu!",
+  "Kirim foto tampang bangun tidur ke sini tanpa edit!",
+  "Chat ortu: 'Aku mau nikah muda, boleh ya?' dan kirim screenshot jawabannya!",
+  "Kirim emoji 🍑💦 ke orang random dan screenshot reaksinya!",
+  "Kirim video kamu joget lagu TikTok yang lagi viral!"
 ];
 
 
@@ -1966,6 +2012,46 @@ if (body === '.dare') {
     caption: `🔥 *Dare Challenge*\n\n${dareText}`
   }, { quoted: msg });
 }
+
+if (budy.startsWith('.brat ')) {
+  const text = budy.slice(6).trim();
+  if (!text) return sock.sendMessage(from, { text: '❌ Masukkan teks setelah .brat' }, { quoted: m });
+
+  const { createCanvas, loadImage } = require('canvas');
+  const canvas = createCanvas(512, 512);
+  const ctx = canvas.getContext('2d');
+
+  // Background putih
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Teks hitam
+  ctx.fillStyle = '#000000';
+  ctx.font = 'bold 40px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+  // Simpan gambar
+  const outputPath = './brat_text.png';
+  const buffer = canvas.toBuffer('image/png');
+  fs.writeFileSync(outputPath, buffer);
+
+  // Ubah jadi stiker
+  const sticker = new Sticker(outputPath, {
+    pack: 'BratSticker',
+    author: 'BotWA',
+    type: 'FULL',
+    quality: 50
+  });
+
+  const stickerBuffer = await sticker.toBuffer();
+  await sock.sendMessage(from, { sticker: stickerBuffer }, { quoted: m });
+
+  // Hapus file
+  fs.unlinkSync(outputPath);
+}
+
 
 
 if (text.trim() === '.info') {
