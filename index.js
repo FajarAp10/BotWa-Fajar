@@ -1949,7 +1949,7 @@ ${komentar}
     }, { quoted: msg });
 }
 
-if (budy === '.truth') {
+if (body === '.truth') {
   const truthText = truthList[Math.floor(Math.random() * truthList.length)];
   const imagePath = './truthordare.png';
   await sock.sendMessage(from, {
@@ -1958,7 +1958,7 @@ if (budy === '.truth') {
   }, { quoted: m });
 }
 
-if (budy === '.dare') {
+if (body === '.dare') {
   const dareText = dareList[Math.floor(Math.random() * dareList.length)];
   const imagePath = './truthordare.png';
   await sock.sendMessage(from, {
