@@ -1,19 +1,18 @@
-# Ganti base image ke Debian-based, bukan Alpine
 FROM node:20
 
-# Buat direktori kerja
-WORKDIR /app
-
-# Copy semua file
-COPY . .
-
-# Install dependencies sistem dulu (wajib buat sharp)
+# Install system dependencies for sharp
 RUN apt-get update && apt-get install -y \
   libvips-dev \
   && rm -rf /var/lib/apt/lists/*
 
-# Install node_modules
+WORKDIR /app
+
+COPY . .
+
+# Reinstall sharp sesuai OS
+RUN npm install --platform=linux --arch=x64 sharp
+
+# Install other dependencies
 RUN npm install
 
-# Jalankan bot
 CMD ["node", "index.js"]
