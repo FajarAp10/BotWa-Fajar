@@ -1955,7 +1955,7 @@ if (body === '.truth') {
   await sock.sendMessage(from, {
     image: { url: imagePath },
     caption: `🎯 *Truth Challenge*\n\n${truthText}`
-  }, { quoted: m });
+  }, { quoted: msg });
 }
 
 if (body === '.dare') {
@@ -1964,7 +1964,7 @@ if (body === '.dare') {
   await sock.sendMessage(from, {
     image: { url: imagePath },
     caption: `🔥 *Dare Challenge*\n\n${dareText}`
-  }, { quoted: m });
+  }, { quoted: msg });
 }
 
 
