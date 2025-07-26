@@ -1,8 +1,15 @@
 FROM node:20-slim
 
-# Install lib yang dibutuhkan sharp (kalau pakai)
+# Install dependensi untuk node-canvas
 RUN apt-get update && apt-get install -y \
-    libvips-dev build-essential python3
+    libcairo2-dev \
+    libjpeg-dev \
+    libpango1.0-dev \
+    libgif-dev \
+    librsvg2-dev \
+    build-essential \
+    python3 \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
