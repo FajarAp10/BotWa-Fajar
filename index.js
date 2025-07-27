@@ -150,7 +150,7 @@ const dareList = [
   "Chat mantan dan bilang *aku masih sayang kamu* (screenshot ya!)",
   "Pake filter jelek di kamera dan kirim fotonya ke sini!",
   "Ketik *Aku ingin menikah tahun ini* di status WhatsApp!",
-  "Rekam suara bilang 'Aku adalah budak cinta' dan kirim ke sini!",
+  "Rekam suara bilang *Aku adalah budak cinta* dan kirim ke sini!",
   "Chat orang random dan tanya *Kamu percaya alien?*",
   "Ketik *Aku lagi pengen dimanja* di grup teman!",
   "Bilang ke orang random *Kamu cakep deh*",
@@ -160,7 +160,7 @@ const dareList = [
   "Ceritakan rahasia tergokil kamu ke grup ini!",
   "Berikan pujian ke 3 orang di grup ini, sekarang juga!",
   "VN ngomong *aku ngaku salah* sambil pura-pura nangis",
-  "VN ngomong dengan suara genit: 'Aduh om, jangan gitu dong'",
+  "VN ngomong dengan suara genit: *Aduh om jangan gitu dong*",
   "Kirim selfie dengan gaya paling kocak!",
   "VN nyebut nama crush kamu 5x nonstop!",
   "Tanya ke orang tua *Boleh nikah umur berapa ya?* lalu screenshot jawabannya",
@@ -992,6 +992,54 @@ if (text.startsWith('.setskor')) {
     });
 }
 
+if (text.startsWith('.tambahskor')) {
+    if (!from.endsWith('@g.us')) {
+        await sock.sendMessage(from, { text: '❌ Perintah hanya bisa digunakan di grup.' });
+        return;
+    }
+
+    if (!isVIP(sender)) {
+        await sock.sendMessage(from, {
+            text: '🚫 Perintah ini hanya untuk pengguna *VIP*.'
+        });
+        return;
+    }
+
+    const args = text.trim().split(/\s+/);
+    const angka = parseInt(args[2] || args[1]); // Bisa .tambahskor @user 10 atau .tambahskor 10
+
+    const quoted = msg.message?.extendedTextMessage?.contextInfo;
+    const mentionedJid = quoted?.mentionedJid?.[0];
+    const target = mentionedJid || quoted?.participant || (args[1]?.startsWith('@') ? args[1].replace(/[^0-9]/g, '') + '@s.whatsapp.net' : null);
+
+    const targetJid = target || sender;
+
+    if (targetJid === OWNER_NUMBER && sender !== OWNER_NUMBER) {
+        await sock.sendMessage(from, {
+            text: '🚫 Tidak bisa menambah skor *Owner*!'
+        });
+        return;
+    }
+
+    if (isNaN(angka)) {
+        await sock.sendMessage(from, {
+            text: `❗ Format salah!\nGunakan: *.tambahskor 10* atau *.tambahskor @user 10*`
+        });
+        return;
+    }
+
+    const skorLama = skorUser.get(targetJid) || 0;
+    const skorBaru = skorLama + angka;
+    skorUser.set(targetJid, skorBaru);
+    simpanSkorKeFile();
+
+    await sock.sendMessage(from, {
+        text: `✅ *Skor berhasil ditambahkan!*\n\n👤 Pengguna: @${targetJid.split('@')[0]}\n➕ Ditambah: *${angka} poin*\n🎯 Total Skor: *${skorBaru} poin*\n🛡️ Oleh: @${sender.split('@')[0]}`,
+        mentions: [targetJid, sender],
+    });
+}
+
+
 if (text.startsWith('.mute')) {
     if (!from.endsWith('@g.us')) {
         await sock.sendMessage(from, { text: '❌ Perintah hanya bisa digunakan di grup.' });
@@ -1459,6 +1507,59 @@ if (text.startsWith('.wm')) {
     return;
 }
 
+if (text.startsWith('.igmp4')) {
+    const igUrl = text.split(' ')[1];
+    const userTag = `@${sender.split('@')[0]}`;
+
+    if (!igUrl || !igUrl.includes("instagram.com")) {
+        await sock.sendMessage(from, {
+            text: "❌ Link Instagram tidak valid.\nGunakan: *.igmp4 <link Instagram>*"
+        });
+        return;
+    }
+
+    await sock.sendMessage(from, {
+        text: `⏳ Mengambil video Instagram... ${userTag}`,
+        mentions: [sender]
+    });
+
+    try {
+        const { data } = await axios.post(
+            'https://saveig.app/api/ajaxSearch',
+            new URLSearchParams({ q: igUrl }),
+            {
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            }
+        );
+
+        const result = data.medias?.[0];
+        if (!result || !result.url) {
+            throw new Error("❌ Tidak menemukan video.");
+        }
+
+        const videoRes = await axios.get(result.url, { responseType: 'arraybuffer' });
+        const videoBuffer = Buffer.from(videoRes.data, 'binary');
+
+        await sock.sendMessage(from, {
+            video: videoBuffer,
+            mimetype: 'video/mp4',
+            caption: `✅ *Video Instagram berhasil didownload*\nUntuk: ${userTag}`,
+            mentions: [sender]
+        });
+
+        console.log(`✅ Video IG berhasil dikirim ke ${from}`);
+    } catch (err) {
+        console.error('❌ ERROR IG API:', err.message);
+        await sock.sendMessage(from, {
+            text: "❌ Gagal mengunduh video Instagram.\nSilakan coba link lain atau tunggu beberapa saat."
+        });
+    }
+
+    return;
+}
 
 
         // 🧊 STIKER
