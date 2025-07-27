@@ -13,6 +13,7 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const moment = require('moment-timezone');
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 
 // Gunakan auth tunggal agar file login bisa disimpan di GitHub/Railway
@@ -2054,16 +2055,6 @@ if (text.startsWith('.suit')) {
         text: `🎮 *SUIT DIMULAI!*\n\n@${sender.split('@')[0]} vs @${mentioned.split('@')[0]}\n\nSilakan kirim angka berikut ke chat bot (chat pribadi):\n\n1 = ✌️ Gunting\n2 = ✊ Batu\n3 = ✋ Kertas\n\n⏳ Waktu 1 menit!`,
         mentions: [sender, mentioned]
     });
-
-    try {
-        await safeSend(mentioned, {
-            text: `👋 Kamu ditantang main *SUIT* oleh @${sender.split('@')[0]}!\n\nKirim angka ke sini:\n1 = ✌️ Gunting\n2 = ✊ Batu\n3 = ✋ Kertas\n\n⏳ Waktu 1 menit!`,
-            mentions: [sender]
-        });
-        await delay(1000);
-    } catch (err) {
-        console.log('❌ Gagal kirim notifikasi suit:', err.message);
-    }
 
     cooldownSuit.add(sender);
     setTimeout(() => cooldownSuit.delete(sender), 30_000); // 30 detik cooldown
