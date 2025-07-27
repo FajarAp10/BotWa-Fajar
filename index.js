@@ -159,6 +159,26 @@ try {
     console.log('📁 skor.json belum ada, akan dibuat otomatis.');
 }
 
+const bankSoalTeracak = new Map();
+
+function ambilSoalAcak(namaFitur, daftarSoal) {
+    if (!bankSoalTeracak.has(namaFitur) || bankSoalTeracak.get(namaFitur).index >= bankSoalTeracak.get(namaFitur).data.length) {
+        // Jika belum pernah disetel atau sudah habis, acak ulang
+        const soalTeracak = [...daftarSoal];
+        for (let i = soalTeracak.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [soalTeracak[i], soalTeracak[j]] = [soalTeracak[j], soalTeracak[i]];
+        }
+        bankSoalTeracak.set(namaFitur, { data: soalTeracak, index: 0 });
+    }
+
+    const soalState = bankSoalTeracak.get(namaFitur);
+    const soal = soalState.data[soalState.index];
+    soalState.index += 1;
+    return soal;
+}
+
+
 let suitGame = new Map();
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
@@ -324,6 +344,26 @@ const soalKuis = [
     { soal: "Alat musik tiup berikut ini adalah?", pilihan: ["A. Gitar", "B. Drum", "C. Seruling", "D. Biola"], jawaban: "C" },
     { soal: "Organ yang memompa darah?", pilihan: ["A. Paru-paru", "B. Ginjal", "C. Hati", "D. Jantung"], jawaban: "D" },
     { soal: "Bentuk bumi adalah?", pilihan: ["A. Datar", "B. Bulat", "C. Kotak", "D. Segitiga"], jawaban: "B" },
+    { soal: "Siapa tokoh utama dalam cerita 'Siti Nurbaya'?", pilihan: ["A. Siti Nurbaya", "B. Zainuddin", "C. Malin Kundang", "D. Sangkuriang"], jawaban: "A" },
+    { soal: "Hewan pemakan daging disebut?", pilihan: ["A. Herbivora", "B. Karnivora", "C. Omnivora", "D. Insektivora"], jawaban: "B" },
+    { soal: "Apa nama alat untuk mengukur suhu?", pilihan: ["A. Barometer", "B. Termometer", "C. Altimeter", "D. Kompas"], jawaban: "B" },
+    { soal: "Berapakah akar kuadrat dari 144?", pilihan: ["A. 10", "B. 11", "C. 12", "D. 13"], jawaban: "C" },
+    { soal: "Siapa penulis novel 'Laskar Pelangi'?", pilihan: ["A. Andrea Hirata", "B. Tere Liye", "C. Dee Lestari", "D. Habiburrahman El Shirazy"], jawaban: "A" },
+    { soal: "Warna campuran biru dan kuning menghasilkan warna?", pilihan: ["A. Hijau", "B. Ungu", "C. Oranye", "D. Merah"], jawaban: "A" },
+    { soal: "Negara dengan piramida terkenal?", pilihan: ["A. Yunani", "B. Italia", "C. Mesir", "D. Meksiko"], jawaban: "C" },
+    { soal: "Siapa yang menulis naskah proklamasi kemerdekaan Indonesia?", pilihan: ["A. Soekarno", "B. Mohammad Hatta", "C. Sutan Sjahrir", "D. Ahmad Subardjo"], jawaban: "D" },
+    { soal: "Apa nama senyawa kimia garam dapur?", pilihan: ["A. H2O", "B. NaCl", "C. CO2", "D. KCl"], jawaban: "B" },
+    { soal: "Manusia bernafas menggunakan?", pilihan: ["A. Insang", "B. Paru-paru", "C. Kulit", "D. Trakea"], jawaban: "B" },
+    { soal: "Satuan ukuran berat dalam sistem metrik?", pilihan: ["A. Liter", "B. Meter", "C. Kilogram", "D. Jam"], jawaban: "C" },
+    { soal: "Hewan yang bisa mengeluarkan tinta sebagai pertahanan?", pilihan: ["A. Gurita", "B. Cumi-cumi", "C. Ikan paus", "D. Lele"], jawaban: "B" },
+    { soal: "Apa nama gunung berapi tertinggi di Indonesia?", pilihan: ["A. Merapi", "B. Rinjani", "C. Semeru", "D. Krakatau"], jawaban: "C" },
+    { soal: "Berapakah jumlah pemain dalam satu tim sepak bola?", pilihan: ["A. 9", "B. 10", "C. 11", "D. 12"], jawaban: "C" },
+    { soal: "Pulau tempat Candi Borobudur berada?", pilihan: ["A. Sumatra", "B. Jawa", "C. Bali", "D. Kalimantan"], jawaban: "B" },
+    { soal: "Pahlawan wanita dari Aceh?", pilihan: ["A. Cut Nyak Dien", "B. RA Kartini", "C. Martha Christina", "D. Dewi Sartika"], jawaban: "A" },
+    { soal: "Hewan mamalia terbesar di dunia?", pilihan: ["A. Gajah", "B. Ikan Paus Biru", "C. Beruang", "D. Jerapah"], jawaban: "B" },
+    { soal: "Lambang dari operasi penjumlahan adalah?", pilihan: ["A. -", "B. ×", "C. ÷", "D. +"], jawaban: "D" },
+    { soal: "Berapakah jumlah provinsi di Indonesia saat ini (2025)?", pilihan: ["A. 34", "B. 36", "C. 38", "D. 40"], jawaban: "C" },
+    { soal: "Apa nama alat musik khas Minang?", pilihan: ["A. Gamelan", "B. Saluang", "C. Sasando", "D. Angklung"], jawaban: "B" },
     { soal: "Pulau terbesar di Indonesia?", pilihan: ["A. Bali", "B. Jawa", "C. Kalimantan", "D. Sumatra"], jawaban: "C" },
     { soal: "Hewan berkaki delapan?", pilihan: ["A. Ular", "B. Semut", "C. Laba-laba", "D. Kupu-kupu"], jawaban: "C" },
     { soal: "Planet terdekat ke matahari?", pilihan: ["A. Mars", "B. Bumi", "C. Venus", "D. Merkurius"], jawaban: "D" },
@@ -1363,10 +1403,10 @@ if (text.startsWith('.unmute')) {
 
 
                 // ✅ FITUR TEBAK-AKU
-        const textMessage = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
+    const textMessage = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
 
     if (textMessage.toLowerCase() === '.tebak-aku') {
-    const soal = soalTebakan[Math.floor(Math.random() * soalTebakan.length)];
+    const soal = ambilSoalAcak('tebakaku', soalTebakan);
 
     const sent = await sock.sendMessage(from, {
         text: `🎮 *TEBAK-TEBAKAN DIMULAI!*\n\n🧠 *Soal:* _${soal.soal}_\n\n⏱️ Jawab dalam 30 detik!\n\n_Reply pesan ini untuk menjawab._`
@@ -1408,8 +1448,10 @@ if (msg.message?.extendedTextMessage?.contextInfo?.stanzaId) {
     }
 }
 
+
+
         if (text.trim() === '.kuis') {
-    const soal = soalKuis[Math.floor(Math.random() * soalKuis.length)];
+    const soal = ambilSoalAcak('kuis', soalKuis);
     const teksSoal = `🎓 *KUIS DIMULAI!*\n\n📌 *Soal:* ${soal.soal}\n\n${soal.pilihan.join('\n')}\n\n✍️ Jawab dengan huruf A/B/C/D dengan mereply pesan ini\n⏱️ Waktu 30 detik!`;
 
     const sent = await sock.sendMessage(from, { text: teksSoal });
@@ -1452,7 +1494,7 @@ if (msg.message?.extendedTextMessage?.contextInfo?.stanzaId) {
 }
 
 if (text.trim() === '.susunkata') {
-    const kata = soalSusunKata[Math.floor(Math.random() * soalSusunKata.length)];
+    const kata = ambilSoalAcak('susunkata', soalSusunKata);
     const acak = kata.split('').sort(() => Math.random() - 0.5).join('');
 
     const sent = await sock.sendMessage(from, {
@@ -1483,7 +1525,7 @@ if (msg.message?.extendedTextMessage?.contextInfo?.stanzaId) {
         if (jawabanUser === sesi.jawaban) {
              tambahSkor(sender, 20);
             await sock.sendMessage(from, {
-                text: `✅ *Benar!* Jawabanmu adalah *${userAnswer}* 🎉\n🏆 Kamu mendapatkan *20 poin!*\n\nMau lagi? Ketik *.susunkata*`
+                text: `✅ *Benar!* Jawabanmu adalah *${jawabanUser}* 🎉\n🏆 Kamu mendapatkan *20 poin!*\n\nMau lagi? Ketik *.susunkata*`
             });
         } else {
             await sock.sendMessage(from, {
@@ -1502,7 +1544,7 @@ if (text === '.family100') {
         return;
     }
 
-    const soal = soalFamily100[Math.floor(Math.random() * soalFamily100.length)];
+    const soal = ambilSoalAcak('family100', soalFamily100);
     const kosong = soal.jawaban.map((_, i) => `*${i + 1}.*`).join("\n");
 
     const pesanPertanyaan = `🎮 *Family 100 Dimulai!*\n━━━━━━━━━\n🧠 *Pertanyaan:*\n${soal.pertanyaan}\n\n📋 *Jawaban:*\n${kosong}\n\n⏳ *Waktu:* 60 detik\n↩️ *Balas pesan ini untuk menjawab.*`;
@@ -2281,7 +2323,7 @@ ${komentar}
 }
 
 if (body === '.truth') {
-  const truthText = truthList[Math.floor(Math.random() * truthList.length)];
+  const truthText = ambilSoalAcak('truth', truthList);
   const imagePath = './truthordare.png';
   await sock.sendMessage(from, {
     image: { url: imagePath },
@@ -2290,7 +2332,7 @@ if (body === '.truth') {
 }
 
 if (body === '.dare') {
-  const dareText = dareList[Math.floor(Math.random() * dareList.length)];
+  const dareText = ambilSoalAcak('dare', dareList);
   const imagePath = './truthordare.png';
   await sock.sendMessage(from, {
     image: { url: imagePath },
