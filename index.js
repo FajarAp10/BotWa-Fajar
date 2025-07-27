@@ -1508,57 +1508,47 @@ if (text.startsWith('.wm')) {
 }
 
 if (text.startsWith('.igmp4')) {
-    const igUrl = text.split(' ')[1];
-    const userTag = `@${sender.split('@')[0]}`;
+  const igUrl = text.split(' ')[1];
+  const userTag = `@${sender.split('@')[0]}`;
 
-    if (!igUrl || !igUrl.includes("instagram.com")) {
-        await sock.sendMessage(from, {
-            text: "❌ Link Instagram tidak valid.\nGunakan: *.igmp4 <link Instagram>*"
-        });
-        return;
-    }
-
+  if (!igUrl || !igUrl.includes("instagram.com")) {
     await sock.sendMessage(from, {
-        text: `⏳ Mengambil video Instagram... ${userTag}`,
-        mentions: [sender]
+      text: "❌ Link Instagram tidak valid.\nGunakan: *.igmp4 <link Instagram>*"
+    });
+    return;
+  }
+
+  await sock.sendMessage(from, {
+    text: `⏳ Mengambil video Instagram... ${userTag}`,
+    mentions: [sender]
+  });
+
+  try {
+    const { data } = await axios.get('https://instagram-reel-api.onrender.com', {
+      params: { url: igUrl }
     });
 
-    try {
-        const { data } = await axios.post(
-            'https://saveig.app/api/ajaxSearch',
-            new URLSearchParams({ q: igUrl }),
-            {
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            }
-        );
+    const videoURL = data.download_link || data.downloadUrl || data.media; // gunakan field yang tersedia
 
-        const result = data.medias?.[0];
-        if (!result || !result.url) {
-            throw new Error("❌ Tidak menemukan video.");
-        }
+    if (!videoURL) throw new Error("❌ Tidak dapat menemukan video");
 
-        const videoRes = await axios.get(result.url, { responseType: 'arraybuffer' });
-        const videoBuffer = Buffer.from(videoRes.data, 'binary');
+    const videoRes = await axios.get(videoURL, { responseType: 'arraybuffer' });
+    const videoBuffer = Buffer.from(videoRes.data, 'binary');
 
-        await sock.sendMessage(from, {
-            video: videoBuffer,
-            mimetype: 'video/mp4',
-            caption: `✅ *Video Instagram berhasil didownload*\nUntuk: ${userTag}`,
-            mentions: [sender]
-        });
+    await sock.sendMessage(from, {
+      video: videoBuffer,
+      mimetype: 'video/mp4',
+      caption: `✅ *Video Instagram berhasil diunduh*\nUntuk: ${userTag}`,
+      mentions: [sender]
+    });
 
-        console.log(`✅ Video IG berhasil dikirim ke ${from}`);
-    } catch (err) {
-        console.error('❌ ERROR IG API:', err.message);
-        await sock.sendMessage(from, {
-            text: "❌ Gagal mengunduh video Instagram.\nSilakan coba link lain atau tunggu beberapa saat."
-        });
-    }
-
-    return;
+    console.log(`✅ Instagram video dikirim ke ${from}`);
+  } catch (err) {
+    console.error('❌ ERROR Instagram API:', err.message);
+    await sock.sendMessage(from, {
+      text: "❌ Gagal mengunduh video Instagram.\nCoba link lain atau nanti."
+    });
+  }
 }
 
 
