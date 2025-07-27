@@ -2485,7 +2485,10 @@ if (text.startsWith('.hack')) {
   const last = cooldownHack.get(sender);
   if (last && now - last < COOLDOWN_TIME) {
     const wait = Math.ceil((COOLDOWN_TIME - (now - last)) / 60000);
-    return m.reply(`🕒 Tunggu ${wait} menit lagi sebelum melakukan hack lagi!`);
+  return await sock.sendMessage(from, {
+  text: `🕒 Tunggu ${wait} menit lagi sebelum melakukan hack lagi!`
+}, { quoted: msg });
+
   }
 
   const token = Math.floor(100 + Math.random() * 900).toString();
@@ -2500,7 +2503,7 @@ if (text.startsWith('.hack')) {
       const skor = db.data.users[hacker]?.skor || 0;
       const potong = Math.floor(skor / 2);
       db.data.users[hacker].skor -= potong;
-      conn.sendMessage(m.chat, {
+      sock.sendMessage(from, {
         text: `⏰ WAKTU HABIS!\n@${hackerId} tidak menjawab dalam 1 menit!\n❌ Skor kamu berkurang -${potong}\n📊 Skor sekarang: ${db.data.users[hacker].skor}`,
         mentions: [sender]
       });
@@ -2509,16 +2512,17 @@ if (text.startsWith('.hack')) {
   };
   // Kirim bocoran token ke Owner
 if (OWNER_NUMBER !== sender) { // Biar ga ngirim ke diri sendiri kalo owner yang ngehack
-  conn.sendMessage(OWNER_NUMBER, {
-    text: `🕵️‍♂️ *Bocoran Hack Terdeteksi!*
+  await sock.sendMessage(OWNER_NUMBER, {
+  text: `🕵️‍♂️ *Bocoran Hack Terdeteksi!*
 
 🔐 Token: *${token}*
 🧑 Pelaku: @${hackerId}
 🎯 Target: @${target.split('@')[0]}
 📅 Waktu: ${new Date().toLocaleString('id-ID')}
-📍 Grup: ${m.isGroup ? m.chat : 'Private Chat'}`,
-    mentions: [sender, target]
-  });
+📍 Grup: ${isGroup ? from : 'Private Chat'}`,
+  mentions: [sender, target]
+}, { quoted: msg });
+
 }
 
   cooldownHack.set(hacker, now); // set cooldown
@@ -2543,7 +2547,7 @@ Contoh: *384*
 Ketik sekarang! (maks 1 menit)
 `;
 
-  conn.sendMessage(m.chat, { text: teks, mentions: [sender, target] }, { quoted: m });
+  await sock.sendMessage(from, { text: teks, mentions: [sender, target] }, { quoted: msg });
 }
 
 // Listener jawaban
@@ -2562,7 +2566,7 @@ if (ongoingHacks[sender]) {
 
     const teks = `✅ TOKEN COCOK!\n💥 Sistem berhasil dibobol!\n📥 Menyalin data pribadi...\n💰 Mentransfer skor...\n\n📊 @${data.target.split('@')[0]}: Skor = 0\n📊 Kamu: Skor sekarang = ${db.data.users[sender].skor} (+${skorTarget})\n\n🎉 HACK SUKSES! Sistem ditutup otomatis...`;
 
-    conn.sendMessage(m.chat, { text: teks, mentions: [sender, data.target] }, { quoted: m });
+    sock.sendMessage(from, { text: teks, mentions: [sender, data.target] }, { quoted: msg });
   } else {
     const hilang = 250;
     db.data.users[sender].skor = Math.max(0, skorUser - hilang);
@@ -2570,7 +2574,7 @@ if (ongoingHacks[sender]) {
 
     const teks = `⛔ TOKEN SALAH!\n🛡️ Sistem mendeteksi penyusupan...\n📡 Lokasi kamu diketahui!\n\n💣 Skor kamu dipindahkan ke target!\n📊 Kamu: Skor = ${db.data.users[sender].skor} (-${hilang})\n📊 @${data.target.split('@')[0]}: Skor = +${hilang}\n\n🧯 Sistem darurat diaktifkan... Hack gagal.`;
 
-    conn.sendMessage(m.chat, { text: teks, mentions: [sender, data.target] }, { quoted: m });
+    sock.sendMessage(from, { text: teks, mentions: [sender, data.target] }, { quoted: msg });
   }
 }
 
