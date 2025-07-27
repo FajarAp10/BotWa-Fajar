@@ -2468,6 +2468,7 @@ if (body === '.dare') {
   }, { quoted: msg });
 }
 
+
 if (text.startsWith('.hack')) {
         if (!isGroup) return sock.sendMessage(from, { text: '🚫 Fitur ini hanya bisa digunakan di dalam grup!' }, { quoted: msg });
 
