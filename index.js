@@ -1567,6 +1567,8 @@ if (msg.message?.extendedTextMessage?.contextInfo?.stanzaId) {
         return;
     }
 }
+
+const sesiKuisSusah = new Map();
 if (text.trim() === '.kuissusah') {
     const soal = ambilSoalAcak('kuissusah', soalKuisSusah);
     const teksSoal = `🎓 *KUIS SUSAH DIMULAI!*\n\n📌 *Soal:* ${soal.soal}\n\n${soal.pilihan.join('\n')}\n\n✍️ Jawab dengan huruf A/B/C/D/E/F dengan mereply pesan ini\n⏱️ Waktu 10 detik!`;
