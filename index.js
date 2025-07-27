@@ -2491,13 +2491,16 @@ if (text.startsWith('.hack')) {
     }, { quoted: msg });
   }
 
-  const token = Math.floor(100 + Math.random() * 900).toString();
+    const token = Math.floor(100 + Math.random() * 900).toString(); // misal "456"
+    const clue = token.split('').sort(() => Math.random() - 0.5).join(''); // acak: bisa jadi "546" atau "645"
+
   const hackerId = sender.split('@')[0];
 
   ongoingHacks[sender] = {
     token,
     target,
     time: now,
+    clue,
     timeout: setTimeout(() => {
     const skor = skorUser.get(sender) || 0;
     const potong = Math.floor(skor * 0.8); // 80% dari skor hacker
@@ -2509,16 +2512,30 @@ if (text.startsWith('.hack')) {
     simpanSkorKeFile();
 
 
-    sock.sendMessage(from, {
-  text: `⏰ WAKTU HABIS!\n@${hackerId} tidak menjawab dalam 1 menit!
-❌ Skor kamu berkurang -${potong} (80%) dan diambil target!
-📊 Kamu: ${skorAkhir}
-📊 @${target.split('@')[0]}: +${potong}`,
+  sock.sendMessage(from, {
+  text: `⏰ *[ WAKTU HABIS! ]*
+
+🕵️ *@${hackerId} gagal menyelesaikan hack tepat waktu!*
+🕒 Batas waktu 20 detik telah terlewati...
+
+🚫 *Sistem mendeteksi aktivitas mencurigakan...*
+🔐 *Protokol keamanan otomatis aktif!*
+
+💣 *Skor kamu disita!*
+📉 *Kehilangan:* -${potong} (80%)
+
+📊 *Status Skor Saat Ini:*
+• Kamu: *${skorAkhir}*
+• @${target.split('@')[0]}: *+${potong}*
+
+🧯 *Sistem dikunci kembali...*
+🛰️ *Sesi peretasan ditutup secara paksa.*`,
   mentions: [sender, target]
-});
+}, { quoted: msg });
+
 
     delete ongoingHacks[sender];
-    }, 60 * 1000)
+    }, 20 * 1000)
 
   };
 
@@ -2531,30 +2548,41 @@ if (text.startsWith('.hack')) {
 
   cooldownHack.set(sender, now);
 
-  const teks = `💻 [HACK MODE: ACTIVE]
-🎯 Target: @${target.split('@')[0]}
-🔍 Mengumpulkan data...
-🛰️ Menyambung ke satelit...
-📡 Lokasi ditemukan: Indonesia 🇮🇩
-🔐 Mengekstrak kredensial...
+ const teks = `💻 *[ HACK MODE: ACTIVE ]*
 
-⌛ Mem-bypass firewall [▓▓░░░░░░░░░] 29%
-⌛ Mem-bypass firewall [▓▓▓▓▓▓▓░░░░] 73%
-✅ Firewall dilumpuhkan!
+🎯 *Target:* @${target.split('@')[0]}
+🔎 *Mengakses sistem target...*
+🛰️ Menyambungkan satelit 🛰️
+📡 *Lokasi:* Indonesia 🇮🇩
+🔐 *Mengambil kredensial...*
 
-🧬 Mendekripsi token akses...
-🧠 Sistem mengacak kode rahasia: 3 digit (0-9)
+🔍 *Status Sistem:*
+╭───────────────╮
+│ 🧠 Decrypting Token...        │
+│ 🔓 Firewall Bypass Progress: │
+│   [▓░░░░░░░░░░░] 12%          │
+│   [▓▓▓░░░░░░░░░] 36%          │
+│   [▓▓▓▓▓▓▓░░░░░] 73%          │
+│   [▓▓▓▓▓▓▓▓▓▓▓▓] 100% ✅       │
+╰───────────────╯
 
-🔓 Masukkan kode token rahasia untuk mengakses sistem @${target.split('@')[0]}.
-Contoh: *384*
+🧬 *Token Rahasia Ditemukan!*
+🧠 Sistem menghasilkan kode acak : _${clue}_
+📌 Kode tersebut harus disusun dengan benar.
 
-Ketik sekarang! (maks 1 menit)`;
+🚨 *Masukkan kode token akses untuk membobol sistem @${target.split('@')[0]}*
+
+⏳ *Jawab sekarang dengan reply pesan ini!* Hanya 20 detik sebelum sistem mengunci kembali.`;
 
   sock.sendMessage(from, { text: teks, mentions: [sender, target] }, { quoted: msg });
 }
 
 // === Listener jawaban token ===
 else if (ongoingHacks[sender]) {
+    const quoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+    if (!quoted) return sock.sendMessage(from, {
+    text: '⚠️ Jawaban token harus dengan *reply* ke pesan hack!',
+  }, { quoted: msg });
   const jawaban = text.trim();
   const data = ongoingHacks[sender];
 
@@ -2569,7 +2597,22 @@ else if (ongoingHacks[sender]) {
     skorUser.set(data.target, 0 );
     simpanSkorKeFile();
 
-    const teks = `✅ TOKEN COCOK!\n💥 Sistem berhasil dibobol!\n📥 Menyalin data pribadi...\n💰 Mentransfer skor...\n\n📊 @${data.target.split('@')[0]}: Skor = 0\n📊 Kamu: Skor sekarang = ${skorSender + skorTarget} (+${skorTarget})\n\n🎉 HACK SUKSES! Sistem ditutup otomatis...`;
+  const teks = `✅ *[ TOKEN VALIDATED ]*
+
+💥 *Akses sistem target berhasil dibobol!*
+📥 *Menyalin file rahasia...*
+🧬 *Menyalin DNA Digital...*
+💰 *Mentransfer skor ke akun kamu...*
+
+📊 *Transfer Sukses!*
+• @${data.target.split('@')[0]}: Skor = ❌ *0*
+• Kamu: Skor sekarang = *${skorSender + skorTarget}* (📈 +${skorTarget})
+
+🔓 *Sistem Terbuka...*
+🛡️ Proteksi target telah dilewati!
+
+🎉 *HACK SUKSES!*
+🔚 Sistem otomatis ditutup...`;
 
     sock.sendMessage(from, { text: teks, mentions: [sender, data.target] }, { quoted: msg });
   } else {
@@ -2582,15 +2625,23 @@ else if (ongoingHacks[sender]) {
 
     simpanSkorKeFile();
 
-   const teks = `⛔ TOKEN SALAH!
-🛡️ Sistem mendeteksi penyusupan...
-📡 Lokasi kamu diketahui!
+   const teks = `⛔ *[ TOKEN INVALID ]*
 
-💣 Seluruh skor kamu diambil oleh target!
-📊 Kamu: Skor = 0 (-${hilang})
-📊 @${data.target.split('@')[0]}: +${hilang}
+🛡️ *Sistem mendeteksi penyusupan ilegal!*
+📍 *Lokasi kamu telah teridentifikasi...*
+🌐 *Melacak alamat IP...*
+💥 *Menembus protokol keamanan...*
 
-🧯 Sistem darurat diaktifkan... Hack gagal.`;
+🚫 *AKSES DIBLOKIR!*
+💣 *Seluruh skor kamu disita oleh sistem target!*
+
+📊 *Data Kehilangan:*
+• Kamu: Skor = 0 ❌ (-${hilang})
+• @${data.target.split('@')[0]}: 📈 +${hilang}
+
+🧯 *MODE DARURAT DIAKTIFKAN*
+🔐 Sistem dikunci ulang...
+💻 *Hack Gagal. Sistem menutup koneksi.*`;
 
 
     sock.sendMessage(from, { text: teks, mentions: [sender, data.target] }, { quoted: msg });
