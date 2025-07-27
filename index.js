@@ -1567,8 +1567,6 @@ if (msg.message?.extendedTextMessage?.contextInfo?.stanzaId) {
         return;
     }
 }
-
-const sesiKuisSusah = new Map();
 if (text.trim() === '.kuissusah') {
     const soal = ambilSoalAcak('kuissusah', soalKuisSusah);
     const teksSoal = `🎓 *KUIS SUSAH DIMULAI!*\n\n📌 *Soal:* ${soal.soal}\n\n${soal.pilihan.join('\n')}\n\n✍️ Jawab dengan huruf A/B/C/D/E/F dengan mereply pesan ini\n⏱️ Waktu 10 detik!`;
@@ -1577,17 +1575,27 @@ if (text.trim() === '.kuissusah') {
 
     const timeout = setTimeout(() => {
         sesiKuisSusah.delete(sent.key.id);
+
+        // Kurangi skor jika waktu habis
+        const idUser = sender; // pastikan 'sender' adalah ID user
+        const skorSekarang = skorUser.get(idUser) || 0;
+        const skorBaru = skorSekarang - 60;
+        skorUser.set(idUser, skorBaru);
+
         sock.sendMessage(from, {
-            text: `⏰ Waktu habis!\nJawaban yang benar adalah: *${soal.jawaban}*`
+            text: `⏰ Waktu habis!\nJawaban yang benar adalah: *${soal.jawaban}*\n❌ Skor kamu dikurangi 60`
         });
     }, 10000);
 
-    sesiKuisSusah.set(sent.key.id, { jawaban: soal.jawaban.toUpperCase(), timeout });
+    sesiKuisSusah.set(sent.key.id, { jawaban: soal.jawaban.toUpperCase(), timeout, idUser: sender });
     return;
 }
 
+// 🔍 CEK JAWABAN KUIS SUSAH (Reply)
 if (msg.message?.extendedTextMessage?.contextInfo?.stanzaId) {
     const replyId = msg.message.extendedTextMessage.contextInfo.stanzaId;
+
+    // Cek apakah ID reply adalah sesi kuis SUSAH
     const sesi = sesiKuisSusah.get(replyId);
 
     if (sesi) {
@@ -1595,16 +1603,17 @@ if (msg.message?.extendedTextMessage?.contextInfo?.stanzaId) {
         sesiKuisSusah.delete(replyId);
 
         const userAnswer = text.trim().toUpperCase();
+
         if (['A', 'B', 'C', 'D', 'E', 'F'].includes(userAnswer)) {
             if (userAnswer === sesi.jawaban) {
                 tambahSkor(sender, 30);
                 await sock.sendMessage(from, {
-                    text: `✅ *Benar!* Jawabanmu adalah *${userAnswer}* 🎉\n🏆 Kamu mendapatkan *30 poin!*\n\nMau lagi? Ketik *.kuissusah*`
+                    text: `✅ *Benar!* Jawabanmu *${userAnswer}* memang luar biasa! 🎯\n🏆 Kamu mendapatkan *+30 poin!*\n\nMau coba lagi? Ketik *.kuissusah*`
                 });
             } else {
-                kurangSkor(sender, 50);  // Kurangi 50 poin kalau salah
+                tambahSkor(sender, -50); // kurangi skor
                 await sock.sendMessage(from, {
-                    text: `❌ *Salah!* Jawabanmu: *${userAnswer}*\n✅ Jawaban benar: *${sesi.jawaban}*\n⚠️ Kamu kehilangan *50 poin!*\nKetik *.kuissusah* untuk mencoba lagi.`
+                    text: `❌ *Salah!* Jawabanmu: *${userAnswer}*\n✅ Jawaban benar: *${sesi.jawaban}*\n💥 *-50 poin!* Karena ini kuis susah!\n\nCoba lagi dengan *.kuissusah*`
                 });
             }
         }
