@@ -411,7 +411,8 @@ const soalKuis = [
   { soal: "Apa bahasa resmi negara Australia?", pilihan: ["A. Inggris", "B. Prancis", "C. Spanyol", "D. Jerman"], jawaban: "A" }
 ];
 
-const sesiKuis = new Map(); // key: pengirim, value: { jawaban: string, timeout: TimeoutObject }
+const sesiKuis = new Map(); 
+const sesiKuisSusah = new Map();
 
 const soalKuisSusah = [
   { soal: "Siapa penemu teori relativitas umum?", pilihan: ["A. Newton", "B. Einstein", "C. Bohr", "D. Galileo", "E. Tesla", "F. Hawking"], jawaban: "B" },
@@ -1542,7 +1543,6 @@ if (msg.message?.extendedTextMessage?.contextInfo?.stanzaId) {
     return;
 }
 
-const sesiKuisSusah = new Map();
 if (text.trim() === '.kuissusah') {
     const soal = ambilSoalAcak('kuissusah', soalKuisSusah);
     const teksSoal = `🎓 *KUIS SUSAH DIMULAI!*\n\n📌 *Soal:* ${soal.soal}\n\n${soal.pilihan.join('\n')}\n\n✍️ Jawab dengan huruf A/B/C/D/E/F dengan mereply pesan ini\n⏱️ Waktu 10 detik!`;
