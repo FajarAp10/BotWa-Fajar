@@ -2469,58 +2469,60 @@ if (body === '.dare') {
 }
 
 if (text.startsWith('.hack')) {
-  if (!isGroup) return m.reply('🚫 Fitur ini hanya bisa digunakan di dalam grup!');
+        if (!isGroup) return sock.sendMessage(from, { text: '🚫 Fitur ini hanya bisa digunakan di dalam grup!' }, { quoted: msg });
 
-  const target = mentionByTag[0];
-  if (!target) return m.reply('Tag targetnya dong!');
+        const target = mentionByTag[0];
+        if (!target) return sock.sendMessage(from, { text: 'Tag targetnya dong!' }, { quoted: msg });
 
-  if (isOwner(target) || isVIP(target)) {
-    return m.reply(`🚷 AKSES DITOLAK!\n🎖️ Target @${target.split('@')[0]} memiliki proteksi VIP/OWNER.\n🛡️ Sistem anti-hack aktif.`, m.chat, { mentions: [target] });
-  }
+        if (isOwner(target) || isVIP(target)) {
+            return sock.sendMessage(from, {
+                text: `🚷 AKSES DITOLAK!\n🎖️ Target @${target.split('@')[0]} memiliki proteksi VIP/OWNER.\n🛡️ Sistem anti-hack aktif.`,
+                mentions: [target]
+            }, { quoted: msg });
+        }
 
-  const now = Date.now();
-  const last = cooldownHack.get(sender);
-  if (last && now - last < COOLDOWN_TIME) {
-    const wait = Math.ceil((COOLDOWN_TIME - (now - last)) / 60000);
-    return m.reply(`🕒 Tunggu ${wait} menit lagi sebelum melakukan hack lagi!`);
-  }
+        const now = Date.now();
+        const last = cooldownHack.get(sender);
+        if (last && now - last < COOLDOWN_TIME) {
+            const wait = Math.ceil((COOLDOWN_TIME - (now - last)) / 60000);
+            return sock.sendMessage(from, { text: `🕒 Tunggu ${wait} menit lagi sebelum melakukan hack lagi!` }, { quoted: msg });
+        }
 
-  const token = Math.floor(100 + Math.random() * 900).toString();
-  const hacker = sender;
-  const hackerId = hacker.split('@')[0];
+        const token = Math.floor(100 + Math.random() * 900).toString();
+        const hackerId = sender.split('@')[0];
 
-  ongoingHacks[hacker] = {
-    token,
-    target,
-    time: Date.now(),
-    timeout: setTimeout(() => {
-      const skor = db.data.users[hacker]?.skor || 0;
-      const potong = Math.floor(skor / 2);
-      db.data.users[hacker].skor -= potong;
-      conn.sendMessage(m.chat, {
-        text: `⏰ WAKTU HABIS!\n@${hackerId} tidak menjawab dalam 1 menit!\n❌ Skor kamu berkurang -${potong}\n📊 Skor sekarang: ${db.data.users[hacker].skor}`,
-        mentions: [sender]
-      });
-      delete ongoingHacks[hacker];
-    }, 60 * 1000)
-  };
-  // Kirim bocoran token ke Owner
-if (OWNER_NUMBER !== sender) { // Biar ga ngirim ke diri sendiri kalo owner yang ngehack
-  conn.sendMessage(OWNER_NUMBER, {
-    text: `🕵️‍♂️ *Bocoran Hack Terdeteksi!*
+        ongoingHacks[sender] = {
+            token,
+            target,
+            time: Date.now(),
+            timeout: setTimeout(() => {
+                const skor = db.data.users[sender]?.skor || 0;
+                const potong = Math.floor(skor / 2);
+                db.data.users[sender].skor -= potong;
+                sock.sendMessage(from, {
+                    text: `⏰ WAKTU HABIS!\n@${hackerId} tidak menjawab dalam 1 menit!\n❌ Skor kamu berkurang -${potong}\n📊 Skor sekarang: ${db.data.users[sender].skor}`,
+                    mentions: [sender]
+                });
+                delete ongoingHacks[sender];
+            }, 60 * 1000)
+        };
+
+        if (OWNER_NUMBER !== sender) {
+            sock.sendMessage(OWNER_NUMBER, {
+                text: `🕵️‍♂️ *Bocoran Hack Terdeteksi!*
 
 🔐 Token: *${token}*
 🧑 Pelaku: @${hackerId}
 🎯 Target: @${target.split('@')[0]}
 📅 Waktu: ${new Date().toLocaleString('id-ID')}
-📍 Grup: ${m.isGroup ? m.chat : 'Private Chat'}`,
-    mentions: [sender, target]
-  });
-}
+📍 Grup: ${isGroup ? from : 'Private Chat'}`,
+                mentions: [sender, target]
+            });
+        }
 
-  cooldownHack.set(hacker, now); // set cooldown
+        cooldownHack.set(sender, now);
 
-  const teks = `💻 [HACK MODE: ACTIVE]
+        const teks = `💻 [HACK MODE: ACTIVE]
 🎯 Target: @${target.split('@')[0]}
 🔍 Mengumpulkan data...
 🛰️ Menyambung ke satelit...
@@ -2540,36 +2542,36 @@ Contoh: *384*
 Ketik sekarang! (maks 1 menit)
 `;
 
-  conn.sendMessage(m.chat, { text: teks, mentions: [sender, target] }, { quoted: m });
-}
+        sock.sendMessage(from, { text: teks, mentions: [sender, target] }, { quoted: msg });
+    }
 
-// Listener jawaban
-if (ongoingHacks[sender]) {
-  const jawaban = text.trim();
-  const data = ongoingHacks[sender];
-  const skorUser = db.data.users[sender]?.skor || 0;
+    // === Cek jika sedang menjawab token ===
+    if (ongoingHacks[sender]) {
+        const jawaban = text.trim();
+        const data = ongoingHacks[sender];
+        const skorUser = db.data.users[sender]?.skor || 0;
 
-  clearTimeout(data.timeout);
-  delete ongoingHacks[sender];
+        clearTimeout(data.timeout);
+        delete ongoingHacks[sender];
 
-  if (jawaban === data.token) {
-    const skorTarget = db.data.users[data.target]?.skor || 0;
-    db.data.users[sender].skor += skorTarget;
-    db.data.users[data.target].skor = 0;
+        if (jawaban === data.token) {
+            const skorTarget = db.data.users[data.target]?.skor || 0;
+            db.data.users[sender].skor += skorTarget;
+            db.data.users[data.target].skor = 0;
 
-    const teks = `✅ TOKEN COCOK!\n💥 Sistem berhasil dibobol!\n📥 Menyalin data pribadi...\n💰 Mentransfer skor...\n\n📊 @${data.target.split('@')[0]}: Skor = 0\n📊 Kamu: Skor sekarang = ${db.data.users[sender].skor} (+${skorTarget})\n\n🎉 HACK SUKSES! Sistem ditutup otomatis...`;
+            const teks = `✅ TOKEN COCOK!\n💥 Sistem berhasil dibobol!\n📥 Menyalin data pribadi...\n💰 Mentransfer skor...\n\n📊 @${data.target.split('@')[0]}: Skor = 0\n📊 Kamu: Skor sekarang = ${db.data.users[sender].skor} (+${skorTarget})\n\n🎉 HACK SUKSES! Sistem ditutup otomatis...`;
 
-    conn.sendMessage(m.chat, { text: teks, mentions: [sender, data.target] }, { quoted: m });
-  } else {
-    const hilang = 250;
-    db.data.users[sender].skor = Math.max(0, skorUser - hilang);
-    db.data.users[data.target].skor += hilang;
+            sock.sendMessage(from, { text: teks, mentions: [sender, data.target] }, { quoted: msg });
+        } else {
+            const hilang = 250;
+            db.data.users[sender].skor = Math.max(0, skorUser - hilang);
+            db.data.users[data.target].skor += hilang;
 
-    const teks = `⛔ TOKEN SALAH!\n🛡️ Sistem mendeteksi penyusupan...\n📡 Lokasi kamu diketahui!\n\n💣 Skor kamu dipindahkan ke target!\n📊 Kamu: Skor = ${db.data.users[sender].skor} (-${hilang})\n📊 @${data.target.split('@')[0]}: Skor = +${hilang}\n\n🧯 Sistem darurat diaktifkan... Hack gagal.`;
+            const teks = `⛔ TOKEN SALAH!\n🛡️ Sistem mendeteksi penyusupan...\n📡 Lokasi kamu diketahui!\n\n💣 Skor kamu dipindahkan ke target!\n📊 Kamu: Skor = ${db.data.users[sender].skor} (-${hilang})\n📊 @${data.target.split('@')[0]}: Skor = +${hilang}\n\n🧯 Sistem darurat diaktifkan... Hack gagal.`;
 
-    conn.sendMessage(m.chat, { text: teks, mentions: [sender, data.target] }, { quoted: m });
-  }
-}
+            sock.sendMessage(from, { text: teks, mentions: [sender, data.target] }, { quoted: msg });
+        }
+    }
 
 if (text.trim() === '.info') {
     await sock.sendMessage(from, {
