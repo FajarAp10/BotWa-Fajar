@@ -2060,10 +2060,7 @@ if (text.startsWith('.suit')) {
             text: `👋 Kamu ditantang main *SUIT* oleh @${sender.split('@')[0]}!\n\nKirim angka ke sini:\n1 = ✌️ Gunting\n2 = ✊ Batu\n3 = ✋ Kertas\n\n⏳ Waktu 1 menit!`,
             mentions: [sender]
         });
-
-        await safeSend(sender, {
-            text: `✅ Tantangan terkirim!\nSilakan pilih angka disini:\n1 = ✌️ Gunting\n2 = ✊ Batu\n3 = ✋ Kertas`
-        });
+        await delay(1000);
     } catch (err) {
         console.log('❌ Gagal kirim notifikasi suit:', err.message);
     }
