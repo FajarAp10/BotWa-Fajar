@@ -2473,11 +2473,21 @@ if (text.startsWith('.hack')) {
   if (!isGroup) return sock.sendMessage(from, { text: '🚫 Fitur ini hanya bisa digunakan di dalam grup!' }, { quoted: msg });
 
   const target = mentionByTag[0];
-  if (!target) return sock.sendMessage(from, { text: 'Tag targetnya dong!' }, { quoted: msg });
+  if (!target) return sock.sendMessage(from, { text: 'Tag target *@user* untuk hack' }, { quoted: msg });
 
   if (isOwner(target) || isVIP(target)) {
     return sock.sendMessage(from, {
-      text: `🚷 AKSES DITOLAK!\n🎖️ Target @${target.split('@')[0]} memiliki proteksi VIP/OWNER.\n🛡️ Sistem anti-hack aktif.`,
+     text: `🚷 *[ AKSES DITOLAK! ]*
+
+🛡️ *Sistem Keamanan Aktif!*
+🎖️ Target: @${target.split('@')[0]} terdaftar sebagai *VIP / OWNER*
+
+🔒 *Proteksi tingkat tinggi terdeteksi...*
+📡 *Firewall menghalangi akses masuk...*
+💥 *Upaya peretasan dihentikan secara otomatis!*
+
+❗ *HACK GAGAL. Sistem diamankan kembali.*`,
+
       mentions: [target]
     }, { quoted: msg });
   }
@@ -2567,12 +2577,12 @@ if (text.startsWith('.hack')) {
 ╰───────────────╯
 
 🧬 *Token Rahasia Ditemukan!*
-🧠 Sistem menghasilkan kode acak : _${clue}_
-📌 Kode tersebut harus disusun dengan benar.
+🧠 Sistem menghasilkan kode acak : ~${clue}~
+📌 Kode harus disusun dengan benar.
 
-🚨 *Masukkan kode token akses untuk membobol sistem @${target.split('@')[0]}*
+🚨 *Masukkan kode akses untuk membobol sistem* @${target.split('@')[0]}
 
-⏳ *Jawab sekarang dengan reply pesan ini!* Hanya 20 detik sebelum sistem mengunci kembali.`;
+⏳ *Jawab reply pesan ini!* Hanya 20 detik sebelum sistem mengunci kembali.`;
 
   sock.sendMessage(from, { text: teks, mentions: [sender, target] }, { quoted: msg });
 }
