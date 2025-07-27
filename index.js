@@ -12,7 +12,7 @@ const { exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
-
+const moment = require('moment-timezone');
 
 
 // Gunakan auth tunggal agar file login bisa disimpan di GitHub/Railway
@@ -36,6 +36,10 @@ function isVIP(jid) {
     return vipList.has(jid) || jid === OWNER_NUMBER;
 }
 
+function isOwner(jid) {
+    return jid === OWNER_NUMBER;
+}
+
 function saveVIP() {
     fs.writeFileSync(vipPath, JSON.stringify({ vips: [...vipList] }, null, 2));
 }
@@ -56,39 +60,61 @@ function saveFiturSementara() {
     fs.writeFileSync(fiturSementaraPath, JSON.stringify(fiturSementara, null, 2));
 }
 
-// Tambahkan fitur ke user (5 menit aktif)
-function addTemporaryFeature(jid, fitur) {
-    const expire = Date.now() + 5 * 60 * 1000; // 5 menit
+function addTemporaryFeature(jid, fitur, groupId) {
+    const expire = Date.now() + 1 * 60 * 1000;
     if (!fiturSementara[jid]) fiturSementara[jid] = {};
-    fiturSementara[jid][fitur] = expire;
+    fiturSementara[jid][fitur] = {
+        expired: expire,
+        groupId: groupId
+    };
     saveFiturSementara();
 }
 
-// Cek apakah user punya fitur
 function hasTemporaryFeature(jid, fitur) {
     cekKadaluarsa();
-    return fiturSementara[jid] && fiturSementara[jid][fitur] && fiturSementara[jid][fitur] > Date.now();
+    return fiturSementara[jid] &&
+           fiturSementara[jid][fitur] &&
+           fiturSementara[jid][fitur].expired > Date.now();
 }
 
-// Hapus fitur yang kadaluarsa
-function cekKadaluarsa() {
-    const now = Date.now();
-    let changed = false;
+function cekKadaluarsa(sock) {
+  const now = Date.now();
+  let changed = false;
 
-    for (const jid in fiturSementara) {
-        for (const fitur in fiturSementara[jid]) {
-            if (fiturSementara[jid][fitur] < now) {
-                delete fiturSementara[jid][fitur];
-                changed = true;
-            }
+  for (const jid in fiturSementara) {
+    for (const fitur in fiturSementara[jid]) {
+      const data = fiturSementara[jid][fitur];
+      if (data.expired < now) {
+        if (sock && typeof sock.sendMessage === 'function' && data.groupId?.endsWith('@g.us')) {
+          const nomor = jid.split('@')[0];
+          const teks = `⛔ *WAKTU HABIS!*\n` +
+            `@${nomor}, akses ke fitur *.${fitur}* kamu telah *berakhir*.\n\n` +
+            `🕒 Silakan beli ulang jika ingin menggunakannya kembali.\n` +
+            `📌 Ketik *.shop* untuk melihat daftar fitur.`;
+
+          sock.sendMessage(data.groupId, {
+            text: teks,
+            mentions: [jid]
+          }).catch(err => {
+            console.error('❌ Gagal kirim pesan kadaluarsa:', err);
+          });
         }
-        if (Object.keys(fiturSementara[jid]).length === 0) {
-            delete fiturSementara[jid];
-            changed = true;
-        }
+
+        delete fiturSementara[jid][fitur];
+        changed = true;
+      }
     }
 
-    if (changed) saveFiturSementara();
+    if (Object.keys(fiturSementara[jid]).length === 0) {
+      delete fiturSementara[jid];
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    saveFiturSementara();
+    console.log('✅ Data fitur sementara diperbarui (expired dibersihkan)');
+  }
 }
 
 
@@ -598,6 +624,10 @@ const sock = makeWASocket({
   defaultQueryTimeoutMs: undefined
 });
 
+//Cek fitur kadaluarsa setiap 10 detik
+setInterval(() => {
+    cekKadaluarsa(sock); // Kirim pesan expired
+}, 10 * 1000);
   sock.ev.on('creds.update', saveCreds);
 
     let wasDisconnected = false;
@@ -724,41 +754,246 @@ if (mutedUsers.has(sender)) {
 }
 
 if (text === '.shop') {
-    const menu = `🛒 *SHOP FITUR SEMENTARA (5 Menit)*
+    const menu = `🎯 *FITUR SHOP* 🎯
+╭─────────────────────────╮
+│ 🛒 *AKSES FITUR SEMENTARA* (1 Menit)
+│ 💰 Harga per fitur: *1.500 poin*
+│ 
+│ 🔓 Ketik untuk beli:
+│
+│ • .belikick ➜ Akses *.kick*
+│ • .belimute ➜ Akses *.mute*
+│ • .beliunmute ➜ Akses *.unmute*
+│ • .belilistvip ➜ Akses *.listvip*
+│ • .belilistskor ➜ Akses *.listskor*
+│
+│ 👑 *FITUR VIP PERMANEN*
+│ 💰 Harga: *10.000 poin*
+│
+│ • .belivip ➜ Daftar jadi VIP
+╰─────────────────────────╯
+📌 *Tips:* Main terus, kumpulkan skor, dan buka semua fitur seru!`;
 
-📌 Ketik untuk beli fitur:
-• .belikick – Akses .kick
-• .belimute – Akses .mute
-• .beliunmute – Akses .unmute
-• .belisetskor – Akses .setskor
-• .belilistvip – Akses .listvip
-• .belilistskor – Akses .listskor
-
-💡 Setiap fitur aktif 5 menit setelah dibeli.
-`;
     await sock.sendMessage(from, { text: menu });
 }
 
-if (text === '.belikick') {
+if (text.trim() === '.belivip') {
     const skor = skorUser.get(sender) || 0;
-    const harga = 1000;
+    const hargaVIP = 10000;
+
+    if (vipList.has(sender)) {
+        await sock.sendMessage(from, {
+            text: '✅ Kamu sudah menjadi *VIP*!'
+        });
+        return;
+    }
+
+    if (skor < hargaVIP) {
+    await sock.sendMessage(from, {
+        text: `❌ *Gagal Membeli VIP!*\n\n📊 Skor kamu saat ini: *${skor} poin*\n💰 Harga VIP: *${hargaVIP} poin*\n\n🚫 Kamu belum cukup poin untuk membeli akses *VIP*.\n\n🎮 Coba main game lebih banyak untuk kumpulkan poin dan beli VIP lebih cepat!\n\n✨ Semangat terus ya!`
+    });
+    return;
+}
+
+
+    skorUser.set(sender, skor - hargaVIP);
+    simpanSkorKeFile();
+    vipList.add(sender);
+    saveVIP();
+
+    await sock.sendMessage(from, {
+    text: `🎉 *Pembelian Berhasil!*\n\n👑 *Selamat*, kamu telah menjadi *VIP Member*!\n\n💰 Harga: *${hargaVIP} poin*\n🔓 Fitur VIP kini aktif dan bisa kamu gunakan.\n\nTerima kasih telah mendukung bot ini! 🚀`
+    });
+    return;
+}
+
+if (text === '.belikick') {
+    if (!isGroup) return sock.sendMessage(from, {
+        text: '❌ Fitur ini hanya bisa digunakan di dalam grup.'
+    });
+
+    const skor = skorUser.get(sender) || 0;
+    const harga = 1500;
+
+    if (isOwner(sender) || isVIP(sender)) {
+        return sock.sendMessage(from, {
+            text: '✅ Kamu sudah punya akses permanen, tidak perlu membeli.'
+        });
+    }
 
     if (hasTemporaryFeature(sender, 'kick')) {
-        return sock.sendMessage(from, { text: '✅ Kamu sudah punya akses .kick sementara.' });
+        return sock.sendMessage(from, {
+            text: '✅ Kamu sudah punya akses *.kick* sementara.'
+        });
     }
 
     if (skor < harga) {
         return sock.sendMessage(from, {
-            text: `❌ Skor kamu tidak cukup.\nButuh *${harga} poin* untuk membeli akses .kick selama 5 menit.`
+            text: `❌ *Skor Tidak Cukup!*\n\n📛 Butuh *${harga} poin* untuk beli *.kick*\n🎯 Skor kamu: *${skor} poin*\n\n🔥 Main dan kumpulkan skor!`
         });
     }
 
     skorUser.set(sender, skor - harga);
     simpanSkorKeFile();
-    addTemporaryFeature(sender, 'kick');
+
+    const expired = Date.now() + 60_000;
+    const waktuBerakhir = moment(expired).tz('Asia/Jakarta').format('HH:mm:ss');
+    addTemporaryFeature(sender, 'kick', from);
 
     return sock.sendMessage(from, {
-        text: `🎉 Selamat! Kamu membeli akses *.kick* selama 5 menit.`
+        text: `✅ *Akses .kick Berhasil Dibeli!*\n\n🦶 Kamu telah membeli akses *fitur .kick* selama *1 menit*.\n\n💰 Harga: *${harga} poin*\n🕒 Berlaku sampai: *${waktuBerakhir} WIB*\n\nGunakan dengan bijak! 🚀`
+    });
+}
+
+if (text === '.belimute') {
+    if (!isGroup) return sock.sendMessage(from, {
+        text: '❌ Fitur ini hanya bisa digunakan di dalam grup.'
+    });
+
+    const skor = skorUser.get(sender) || 0;
+    const harga = 1500;
+
+    if (isOwner(sender) || isVIP(sender)) {
+        return sock.sendMessage(from, {
+            text: '✅ Kamu sudah punya akses permanen, tidak perlu membeli.'
+        });
+    }
+
+    if (hasTemporaryFeature(sender, 'mute')) {
+        return sock.sendMessage(from, {
+            text: '✅ Kamu sudah punya akses *.mute* sementara.'
+        });
+    }
+
+    if (skor < harga) {
+        return sock.sendMessage(from, {
+            text: `❌ *Skor Tidak Cukup!*\n\n📛 Butuh *${harga} poin* untuk beli *.mute*\n🎯 Skor kamu: *${skor} poin\n\n🔥 Main dan kumpulkan skor!*`
+        });
+    }
+
+    skorUser.set(sender, skor - harga);
+    simpanSkorKeFile();
+
+    const expired = Date.now() + 60_000;
+    const waktuBerakhir = moment(expired).tz('Asia/Jakarta').format('HH:mm:ss');
+    addTemporaryFeature(sender, 'mute', from);
+
+    return sock.sendMessage(from, {
+        text: `✅ *Akses .mute Berhasil Dibeli!*\n\n🔇 Kamu telah membeli akses *fitur .mute* selama *1 menit*.\n\n💰 Harga: *${harga} poin*\n🕒 Berlaku sampai: *${waktuBerakhir} WIB*\n\nGunakan dengan bijak untuk menjaga ketertiban grup. 🤖`
+    });
+}
+
+if (text === '.beliunmute') {
+    if (!isGroup) return sock.sendMessage(from, {
+        text: '❌ Fitur ini hanya bisa digunakan di dalam grup.'
+    });
+
+    const skor = skorUser.get(sender) || 0;
+    const harga = 1500;
+
+    if (isOwner(sender) || isVIP(sender)) {
+        return sock.sendMessage(from, {
+            text: '✅ Kamu sudah punya akses permanen, tidak perlu membeli.'
+        });
+    }
+
+    if (hasTemporaryFeature(sender, 'unmute')) {
+        return sock.sendMessage(from, {
+            text: '✅ Kamu sudah punya akses *.unmute* sementara.'
+        });
+    }
+
+    if (skor < harga) {
+        return sock.sendMessage(from, {
+            text: `❌ *Skor Tidak Cukup!*\n\n📛 Butuh *${harga} poin* untuk beli *.unmute*\n🎯 Skor kamu: *${skor} poin*\n\n🔥 Main dan kumpulkan skor!`
+        });
+    }
+
+    skorUser.set(sender, skor - harga);
+    simpanSkorKeFile();
+
+    const expired = Date.now() + 60_000;
+    const waktuBerakhir = moment(expired).tz('Asia/Jakarta').format('HH:mm:ss');
+    addTemporaryFeature(sender, 'unmute', from);
+
+    return sock.sendMessage(from, {
+        text: `✅ *Akses .unmute Berhasil Dibeli!*\n\n🔊 Kamu telah membeli akses *fitur .unmute* selama *1 menit*.\n\n💰 Harga: *${harga} poin*\n🕒 Berlaku sampai: *${waktuBerakhir} WIB*\n\nGunakan dengan bijak agar diskusi tetap sehat. 🤖`
+    });
+}
+
+if (text === '.belilistvip') {
+    if (!isGroup) return sock.sendMessage(from, {
+        text: '❌ Fitur ini hanya bisa digunakan di dalam grup.'
+    });
+
+    const skor = skorUser.get(sender) || 0;
+    const harga = 1500;
+
+    if (isOwner(sender) || isVIP(sender)) {
+        return sock.sendMessage(from, {
+            text: '✅ Kamu sudah punya akses permanen ke .listvip.'
+        });
+    }
+
+    if (hasTemporaryFeature(sender, 'listvip')) {
+        return sock.sendMessage(from, {
+            text: '✅ Kamu sudah punya akses *.listvip* sementara.'
+        });
+    }
+
+    if (skor < harga) {
+        return sock.sendMessage(from, {
+            text: `❌ *Skor Tidak Cukup!*\n\n📛 Butuh *${harga} poin* untuk beli *.listvip*\n🎯 Skor kamu: *${skor} poin*\n\n🔥 Main dan kumpulkan skor!`
+        });
+    }
+
+    skorUser.set(sender, skor - harga);
+    simpanSkorKeFile();
+
+    const expired = Date.now() + 60_000;
+    const waktuBerakhir = moment(expired).tz('Asia/Jakarta').format('HH:mm:ss');
+    addTemporaryFeature(sender, 'listvip', from);
+
+    return sock.sendMessage(from, {
+        text: `✅ *Akses .listvip Berhasil Dibeli!*\n\n👥 Kamu telah membeli akses ke *fitur .listvip* selama *1 menit*.\n\n💰 Harga: *${harga} poin*\n🕒 Berlaku sampai: *${waktuBerakhir} WIB*\n\nGunakan sekarang untuk lihat daftar VIP aktif.`
+    });
+}
+
+if (text === '.belilistskor') {
+    if (!isGroup) return sock.sendMessage(from, {
+        text: '❌ Fitur ini hanya bisa digunakan di dalam grup.'
+    });
+
+    const skor = skorUser.get(sender) || 0;
+    const harga = 1500;
+
+    if (isOwner(sender) || isVIP(sender)) {
+        return sock.sendMessage(from, {
+            text: '✅ Kamu sudah punya akses permanen ke *.listskor*.'
+        });
+    }
+
+    if (hasTemporaryFeature(sender, 'listskor')) {
+        return sock.sendMessage(from, {
+            text: '✅ Kamu sudah punya akses *.listskor* sementara.'
+        });
+    }
+
+    if (skor < harga) {
+        return sock.sendMessage(from, {
+            text: `❌ *Skor Tidak Cukup!*\n\n📛 Butuh *${harga} poin* untuk beli *.listskor*\n🎯 Skor kamu: *${skor} poin*\n\n🔥 Main dan kumpulkan skor!`
+        });
+    }
+
+    skorUser.set(sender, skor - harga);
+    simpanSkorKeFile();
+
+    const expired = Date.now() + 60_000; // 1 menit
+    const waktuBerakhir = moment(expired).tz('Asia/Jakarta').format('HH:mm:ss');
+    addTemporaryFeature(sender, 'listskor', from);
+
+    return sock.sendMessage(from, {
+        text: `✅ *Akses .listskor Berhasil Dibeli!*\n\n📊 Kamu telah membeli akses ke *fitur .listskor* selama *1 menit*.\n\n💰 Harga: *${harga} poin*\n🕒 Berlaku sampai: *${waktuBerakhir} WIB*\n\nGunakan sekarang sebelum waktunya habis.`
     });
 }
 
@@ -776,7 +1011,7 @@ if (text === '.belikick') {
 }
 
 if (body.startsWith('.listskor')) {
-  if (!isVIP(sender)) {
+ if (!isVIP(sender) && !hasTemporaryFeature(sender, 'listskor')) {
     await sock.sendMessage(from, {
       text: '❌ Perintah hanya bisa digunakan *Owner* dan *Vip*.'
     }, { quoted: msg });
@@ -834,7 +1069,7 @@ if (body.startsWith('.listskor')) {
 
 
 if (body.startsWith('.listvip')) {
-  if (!isVIP(sender)) {
+    if (!isVIP(sender) && !hasTemporaryFeature(sender, 'listvip')) {
     await sock.sendMessage(from, {
       text: '❌ Perintah hanya bisa digunakan *Owner* dan *Vip*.'
     }, { quoted: msg });
@@ -948,35 +1183,6 @@ if (body.startsWith('.unsetvip') && isGroup) {
   }, { quoted: msg });
 }
 
-if (text.trim() === '.beli') {
-    const skor = skorUser.get(sender) || 0;
-    const hargaVIP = 10000;
-
-    if (vipList.has(sender)) {
-        await sock.sendMessage(from, {
-            text: '✅ Kamu sudah menjadi *VIP*!'
-        });
-        return;
-    }
-
-    if (skor < hargaVIP) {
-        await sock.sendMessage(from, {
-            text: `💸 *Skor kamu belum cukup!*\n\n• Skor kamu: *${skor} poin*\n• Harga VIP: *${hargaVIP} poin*\n\n💡 Main game untuk kumpulkan skor dan beli VIP.`
-        });
-        return;
-    }
-
-    skorUser.set(sender, skor - hargaVIP);
-    simpanSkorKeFile();
-    vipList.add(sender);
-    saveVIP();
-
-    await sock.sendMessage(from, {
-        text: `🎉 *Selamat!*\n\nKamu telah membeli *VIP* seharga *${hargaVIP} poin*.\n\n👑 Kini kamu bisa akses fitur *VIP*`
-    });
-    return;
-}
-
 // 🔒 KICK – Hanya untuk VIP
 if (text.startsWith('.kick')) {
     const sender = msg.key.participant || msg.key.remoteJid;
@@ -987,10 +1193,11 @@ if (text.startsWith('.kick')) {
         return;
     }
 
-    if (!isVIP(sender)) {
-        await sock.sendMessage(from, { text: '🔐 Perintah ini hanya bisa digunakan oleh VIP.' });
-        return;
-    }
+    if (!isVIP(sender) && !hasTemporaryFeature(sender, 'kick')) {
+    await sock.sendMessage(from, { text: '🔐 Perintah ini hanya bisa digunakan oleh VIP atau beli.' });
+    return;
+}
+
 
     const quotedMsg = msg.message?.extendedTextMessage?.contextInfo;
     const mentionedJid = quotedMsg?.mentionedJid;
@@ -1081,64 +1288,17 @@ if (text.startsWith('.setskor')) {
     });
 }
 
-if (text.startsWith('.tambahskor')) {
-    if (!from.endsWith('@g.us')) {
-        await sock.sendMessage(from, { text: '❌ Perintah hanya bisa digunakan di grup.' });
-        return;
-    }
-
-    if (!isVIP(sender)) {
-        await sock.sendMessage(from, {
-            text: '🚫 Perintah ini hanya untuk pengguna *VIP*.'
-        });
-        return;
-    }
-
-    const args = text.trim().split(/\s+/);
-    const angka = parseInt(args[2] || args[1]); // Bisa .tambahskor @user 10 atau .tambahskor 10
-
-    const quoted = msg.message?.extendedTextMessage?.contextInfo;
-    const mentionedJid = quoted?.mentionedJid?.[0];
-    const target = mentionedJid || quoted?.participant || (args[1]?.startsWith('@') ? args[1].replace(/[^0-9]/g, '') + '@s.whatsapp.net' : null);
-
-    const targetJid = target || sender;
-
-    if (targetJid === OWNER_NUMBER && sender !== OWNER_NUMBER) {
-        await sock.sendMessage(from, {
-            text: '🚫 Tidak bisa menambah skor *Owner*!'
-        });
-        return;
-    }
-
-    if (isNaN(angka)) {
-        await sock.sendMessage(from, {
-            text: `❗ Format salah!\nGunakan: *.tambahskor 10* atau *.tambahskor @user 10*`
-        });
-        return;
-    }
-
-    const skorLama = skorUser.get(targetJid) || 0;
-    const skorBaru = skorLama + angka;
-    skorUser.set(targetJid, skorBaru);
-    simpanSkorKeFile();
-
-    await sock.sendMessage(from, {
-        text: `✅ *Skor berhasil ditambahkan!*\n\n👤 Pengguna: @${targetJid.split('@')[0]}\n➕ Ditambah: *${angka} poin*\n🎯 Total Skor: *${skorBaru} poin*\n🛡️ Oleh: @${sender.split('@')[0]}`,
-        mentions: [targetJid, sender],
-    });
-}
-
-
 if (text.startsWith('.mute')) {
     if (!from.endsWith('@g.us')) {
         await sock.sendMessage(from, { text: '❌ Perintah hanya bisa digunakan di grup.' });
         return;
     }
 
-    if (!isVIP(sender)) {
-        await sock.sendMessage(from, { text: '❌ Hanya *VIP* yang dapat menggunakan perintah ini.' });
-        return;
+    if (!isVIP(sender) && !hasTemporaryFeature(sender, 'mute')) {
+    await sock.sendMessage(from, { text: '🔐 Perintah ini hanya bisa digunakan oleh VIP atau beli.' });
+    return;
     }
+
 
     const quotedMsg = msg.message?.extendedTextMessage?.contextInfo;
     const mentionedJid = quotedMsg?.mentionedJid?.[0] || quotedMsg?.participant;
@@ -1173,9 +1333,9 @@ if (text.startsWith('.unmute')) {
         return;
     }
 
-    if (!isVIP(sender)) {
-        await sock.sendMessage(from, { text: '❌ Hanya *VIP* yang dapat menggunakan perintah ini.' });
-        return;
+     if (!isVIP(sender) && !hasTemporaryFeature(sender, 'unmute')) {
+    await sock.sendMessage(from, { text: '🔐 Perintah ini hanya bisa digunakan oleh VIP atau beli.' });
+    return;
     }
 
     const quotedMsg = msg.message?.extendedTextMessage?.contextInfo;
@@ -1276,9 +1436,9 @@ if (msg.message?.extendedTextMessage?.contextInfo?.stanzaId) {
         const userAnswer = text.trim().toUpperCase();
         if (['A', 'B', 'C', 'D'].includes(userAnswer)) {
             if (userAnswer === sesi.jawaban) {
-                tambahSkor(sender, 10);
+                tambahSkor(sender, 15);
                 await sock.sendMessage(from, {
-                    text: `✅ *Benar!* Jawabanmu adalah *${userAnswer}* 🎉\n🏆 Kamu mendapatkan *10 poin!*\n\nMau lagi? Ketik *.kuis*`
+                    text: `✅ *Benar!* Jawabanmu adalah *${userAnswer}* 🎉\n🏆 Kamu mendapatkan *15 poin!*\n\nMau lagi? Ketik *.kuis*`
                 });
             } else {
                 await sock.sendMessage(from, {
@@ -1395,7 +1555,7 @@ if (msg.message?.extendedTextMessage?.contextInfo?.stanzaId) {
     sesi.jawaban[index] = soalFamily100.find(s => s.pertanyaan === sesi.pertanyaan).jawaban[index];
     sesi.jawabanLolos[index] = userTag;
 
-    tambahSkor(sender, 5); // ✅ Tambahkan poin 5 jika benar
+    tambahSkor(sender, 20); // ✅ Tambahkan poin 5 jika benar
 
     const isi = sesi.jawaban.map((j, i) => {
         return `*${i + 1}.* ${j ? `✅ ${j} (@${sesi.jawabanLolos[i]})` : ''}`;
@@ -1403,7 +1563,7 @@ if (msg.message?.extendedTextMessage?.contextInfo?.stanzaId) {
 
 
             await sock.sendMessage(from, {
-                text: `🎮 *Jawaban Diterima!*\n━━━━━━━━━\n🧠 *Pertanyaan:* ${sesi.pertanyaan}\n\n📋 *Jawaban Saat Ini:*\n${isi}\n\n✅ *Jawaban "${userJawab}" benar!*\n🎁 +5 poin untuk @${userTag}\n↩️ Balas pesan ini untuk menjawab.`,
+                text: `🎮 *Jawaban Diterima!*\n━━━━━━━━━\n🧠 *Pertanyaan:* ${sesi.pertanyaan}\n\n📋 *Jawaban Saat Ini:*\n${isi}\n\n✅ *Jawaban "${userJawab}" benar!*\n🎁 +20 poin untuk @${userTag}\n↩️ Balas pesan ini untuk menjawab.`,
                 mentions: [sender]
             });
 
@@ -1475,7 +1635,7 @@ if (msg.message?.extendedTextMessage?.contextInfo?.quotedMessage) {
         if (benar) {
             poinTambahan = 50;
         } else {
-            poinTambahan = -30;
+            poinTambahan = -60;
         }
 
         tambahSkor(sender, poinTambahan);
@@ -1596,50 +1756,6 @@ if (text.startsWith('.wm')) {
     return;
 }
 
-if (text.startsWith('.igmp4')) {
-  const igUrl = text.split(' ')[1];
-  const userTag = `@${sender.split('@')[0]}`;
-
-  if (!igUrl || !igUrl.includes("instagram.com")) {
-    await sock.sendMessage(from, {
-      text: "❌ Link Instagram tidak valid.\nGunakan: *.igmp4 <link Instagram>*"
-    });
-    return;
-  }
-
-  await sock.sendMessage(from, {
-    text: `⏳ Mengambil video Instagram... ${userTag}`,
-    mentions: [sender]
-  });
-
-  try {
-    const { data } = await axios.get('https://instagram-reel-api.onrender.com', {
-      params: { url: igUrl }
-    });
-
-    const videoURL = data.download_link || data.downloadUrl || data.media; // gunakan field yang tersedia
-
-    if (!videoURL) throw new Error("❌ Tidak dapat menemukan video");
-
-    const videoRes = await axios.get(videoURL, { responseType: 'arraybuffer' });
-    const videoBuffer = Buffer.from(videoRes.data, 'binary');
-
-    await sock.sendMessage(from, {
-      video: videoBuffer,
-      mimetype: 'video/mp4',
-      caption: `✅ *Video Instagram berhasil diunduh*\nUntuk: ${userTag}`,
-      mentions: [sender]
-    });
-
-    console.log(`✅ Instagram video dikirim ke ${from}`);
-  } catch (err) {
-    console.error('❌ ERROR Instagram API:', err.message);
-    await sock.sendMessage(from, {
-      text: "❌ Gagal mengunduh video Instagram.\nCoba link lain atau nanti."
-    });
-  }
-}
-
 
         // 🧊 STIKER
         if (text.trim().toLowerCase() === '.stiker') {
@@ -1669,8 +1785,8 @@ if (text.startsWith('.igmp4')) {
                 const mediaBuffer = await downloadMediaMessage(messageForMedia, "buffer", {}, { logger: console });
 
                 const sticker = new Sticker(mediaBuffer, {
-                    pack: 'Bot Jarr',
-                    author: 'Fajar',
+                    pack: 'StikerBot',
+                    author: 'Jarr',
                     type: 'FULL',
                     quality: 100
                 });
@@ -2000,15 +2116,15 @@ if (!text.startsWith('.') && ['1', '2', '3'].includes(text.trim()) && !msg.key.r
             const pemenang = hasil === 'p1' ? game.pemain1 : game.pemain2;
             const kalah = hasil === 'p1' ? game.pemain2 : game.pemain1;
 
-            const skorMenang = (skorUser.get(pemenang) || 0) + 20;
-            const skorKalah = Math.max((skorUser.get(kalah) || 0) - 10, 0);
+            const skorMenang = (skorUser.get(pemenang) || 0) + 50;
+            const skorKalah = Math.max((skorUser.get(kalah) || 0) - 50, 0);
 
             skorUser.set(pemenang, skorMenang);
             skorUser.set(kalah, skorKalah);
             simpanSkorKeFile();
 
-            teksHasil += `🏆 Pemenang: @${pemenang.split('@')[0]} (+20 poin)\n`;
-            teksHasil += `😢 Kalah: @${kalah.split('@')[0]} (-10 poin)`;
+            teksHasil += `🏆 Pemenang: @${pemenang.split('@')[0]} (+50 poin)\n`;
+            teksHasil += `😢 Kalah: @${kalah.split('@')[0]} (-50 poin)`;
         }
 
         await safeSend(grupKey, {
@@ -2222,87 +2338,124 @@ if (text.trim() === '.info') {
     return;
 }
 
-
 if (text.trim() === '.menu') {
     const waktu = new Date();
-    const tanggal = waktu.toLocaleDateString('id-ID', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-    });
+
+    // Ambil nilai numerik
+    const tanggal = waktu.getDate().toString().padStart(2, '0');
+    const bulan = (waktu.getMonth() + 1).toString().padStart(2, '0'); // 0-based
+    const tahun = waktu.getFullYear().toString();
+    const jam = waktu.toTimeString().split(' ')[0]; // HH:MM:SS
+
+    // Font fancy
+    const fancy = (text) =>
+        text
+            .replace(/[a-z]/g, c => ({
+                a: 'ᴀ', b: 'ʙ', c: 'ᴄ', d: 'ᴅ', e: 'ᴇ',
+                f: 'ғ', g: 'ɢ', h: 'ʜ', i: 'ɪ', j: 'ᴊ',
+                k: 'ᴋ', l: 'ʟ', m: 'ᴍ', n: 'ɴ', o: 'ᴏ',
+                p: 'ᴘ', q: 'ǫ', r: 'ʀ', s: 'ꜱ', t: 'ᴛ',
+                u: 'ᴜ', v: 'ᴠ', w: 'ᴡ', x: 'x', y: 'ʏ', z: 'ᴢ'
+            }[c]) || c)
+            .replace(/[A-Z]/g, c => ({
+                A: 'ᴀ', B: 'ʙ', C: 'ᴄ', D: 'ᴅ', E: 'ᴇ',
+                F: 'ғ', G: 'ɢ', H: 'ʜ', I: 'ɪ', J: 'ᴊ',
+                K: 'ᴋ', L: 'ʟ', M: 'ᴍ', N: 'ɴ', O: 'ᴏ',
+                P: 'ᴘ', Q: 'ǫ', R: 'ʀ', S: 'ꜱ', T: 'ᴛ',
+                U: 'ᴜ', V: 'ᴠ', W: 'ᴡ', X: 'x', Y: 'ʏ', Z: 'ᴢ'
+            }[c]) || c);
+
+    const toFancyNumber = (str) => str.replace(/\d/g, d => ({
+        '0': '𝟎', '1': '𝟏', '2': '𝟐', '3': '𝟑', '4': '𝟒',
+        '5': '𝟓', '6': '𝟔', '7': '𝟕', '8': '𝟖', '9': '𝟗'
+    }[d]));
+
+    const versiFancy = toFancyNumber('1.0.0');
+    const tanggalFancy = `${toFancyNumber(tanggal)}-${toFancyNumber(bulan)}-${toFancyNumber(tahun)}`;
+    const jamFancy = toFancyNumber(jam);
+
+    const readmore = String.fromCharCode(8206).repeat(4001); // WA Read More
 
     await sock.sendMessage(from, {
-        text: `╭─〔 *🤖 BOT JARR MENU* 〕─╮
-│
-├ 🎮 *Game* 
-│ • .kuis → Kuis pilihan ganda
-│ • .suit → Main suit lawan teman
-│ • .judi → Tebak ganjil / genap
-│ • .truth → Jawab jujur
-│ • .dare → Lakukan tantangan
-│ • .tebak-aku → Tebakan lucu
-│ • .susunkata → Susun huruf
-│ • .family100 → Jawaban terbanyak
-│
-├ 🏳️‍🌈 *Fitur Lucu*
-│ • .gay @user → Seberapa gay?
-│ • .lesbi @user → Seberapa lesbi?
-│ • .cantik @user → Seberapa cantik?
-│ • .ganteng @user → Seberapa ganteng?
-│ • .jodoh @user @user → Cocoklogi cinta
-│
-├ 🧠 *AI Assistant*
-│ • .ai <pertanyaan> → Tanya ke AI
-│
-├ 🖼️ *Media*
-│ • .stiker → Ubah gambar jadi stiker
-│ • .dwfoto → Unduh foto sekali lihat
-│ • .dwvideo → Unduh video sekali lihat
-│
-├ 🎥 *TikTok Tools*
-│ • .ttmp3 <link> → Unduh mp3 TikTok
-│ • .wm <link> → Unduh tanpa watermark
-│
-├ 👥 *Fitur Grup*
-│ • .tagall → Mention semua member
-│
-├ 📊 *Skor Game*
-│ • .skor → Lihat skor kamu
-│ • .kirimskor → Kirim skor ke teman
-│
-├ 📋 *Info*
-│ • .beli → Beli VIP
-│ • .info → Info bot & owner
-│ • .menu → Tampilkan menu ini
-│
-╰─📅 ${tanggal}
+        image: { url: './logo.jpg' },
+        caption:
+`ꜱᴇʟᴀᴍᴀᴛ ᴅᴀᴛᴀɴɢ
 
-╭─〔 *🔐 FITUR VIP / OWNER* 〕─╮
+> ɴᴀᴍᴀ          : ʙᴏᴛ ᴊᴀʀʀ
+> ᴠᴇʀꜱɪ          : ${versiFancy}
+> ᴛᴀɴɢɢᴀʟ   : ${tanggalFancy}
+> ᴊᴀᴍ            : ${jamFancy}
+
+${readmore}╭─〔 *🤖 ʙᴏᴛ ᴊᴀʀʀ ᴍᴇɴᴜ* 〕─╮
 │
-├ 👥 *Grup VIP*
-│ • .kick @user → Kick user
-│ • .mute @user → Mute user
-│ • .unmute @user → Buka mute
+├─ 〔 🎮 *ɢᴀᴍᴇ* 〕
+│ .kuis → Kuis pilihan ganda
+│ .suit → Main suit lawan teman
+│ .judi → Tebak ganjil / genap
+│ .truth → Jawab jujur
+│ .dare → Lakukan tantangan
+│ .tebak-aku → Tebakan lucu
+│ .susunkata → Susun huruf
+│ .family100 → Jawaban terbanyak
 │
-├ 📊 *Skor Khusus*
-│ • .setskor → Atur skor user
+├─ 〔 🏳️‍🌈 *ꜰɪᴛᴜʀ ʟᴜᴄᴜ* 〕
+│ .gay @user → Seberapa gay?
+│ .lesbi @user → Seberapa lesbi?
+│ .cantik @user → Seberapa cantik?
+│ .ganteng @user → Seberapa ganteng?
+│ .jodoh @user @user → Cocoklogi cinta
 │
-├ 👑 *VIP Control*
-│ • .setvip @user → Jadikan VIP
-│ • .unsetvip @user → Cabut VIP
-│ • .listvip → Daftar VIP
-│ • .listskor → Daftar SKOR
+├─ 〔 🧠 *ᴀɪ ᴀꜱꜱɪꜱᴛᴀɴᴛ* 〕
+│ .ai <pertanyaan> → Tanya ke AI
 │
-├ ⚙️ *Bot Control* (Owner Only)
-│ • .on → Aktifkan bot
-│ • .off → Nonaktifkan bot
+├─ 〔 🖼️ *ᴍᴇᴅɪᴀ* 〕
+│ .stiker → Ubah gambar jadi stiker
+│ .dwfoto → Unduh foto sekali lihat
+│ .dwvideo → Unduh video sekali lihat
 │
-╰─👑 Owner: @${OWNER_NUMBER?.split('@')[0] || '6283836348226'}
-        `,
-        mentions: [OWNER_NUMBER]
-    });
-    return;
+├─ 〔 🎥 *ᴛɪᴋᴛᴏᴋ ᴛᴏᴏʟꜱ* 〕
+│ .ttmp3 <link> → Unduh mp3 TikTok
+│ .wm <link> → Unduh tanpa watermark
+│
+├─ 〔 👥 *ꜰɪᴛᴜʀ ɢʀᴜᴘ* 〕
+│ .tagall → Mention semua member
+│
+├─ 〔 📊 *ꜱᴋᴏʀ ɢᴀᴍᴇ* 〕
+│ .skor → Lihat skor kamu
+│ .kirimskor → Kirim skor ke teman
+│
+├─ 〔 📋 *ɪɴꜰᴏ* 〕
+│ .shop → Buka menu shop
+│ .info → Info bot & owner
+│ .menu → Tampilkan menu ini
+│
+╰── 📅 ${tanggalFancy}
+
+╭─〔 *🔐 ꜰɪᴛᴜʀ ᴠɪᴘ / ᴏᴡɴᴇʀ* 〕─╮
+│
+├─ 〔 👥 *ɢʀᴜᴘ ᴠɪᴘ* 〕
+│ .kick @user → Kick user
+│ .mute @user → Mute user
+│ .unmute @user → Buka mute
+│
+├─ 〔 📊 *ꜱᴋᴏʀ ᴋʜᴜꜱᴜꜱ* 〕
+│ .setskor → Atur skor user
+│
+├─ 〔 👑 *ᴠɪᴘ ᴄᴏɴᴛʀᴏʟ* 〕
+│ .setvip @user → Jadikan VIP
+│ .unsetvip @user → Cabut VIP
+│ .listvip → Daftar VIP
+│ .listskor → Daftar SKOR
+│
+├─ 〔 ⚙️ *ʙᴏᴛ ᴄᴏɴᴛʀᴏʟ* 〕
+│ .on → Aktifkan bot
+│ .off → Nonaktifkan bot
+│
+╰── 👑 Owner: @${OWNER_NUMBER?.split('@')[0] || '6283836348226'}`,
+  mentions: [OWNER_NUMBER]
+});
+return;
+
 }
 
 
