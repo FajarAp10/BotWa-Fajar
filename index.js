@@ -2468,7 +2468,7 @@ if (body === '.dare') {
   }, { quoted: msg });
 }
 
-if (command === 'hack') {
+if (text.startsWith('.hack')) {
   if (!isGroup) return m.reply('🚫 Fitur ini hanya bisa digunakan di dalam grup!');
 
   const target = mentionByTag[0];
