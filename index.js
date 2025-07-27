@@ -760,7 +760,10 @@ if (body.startsWith('.listvip')) {
     return;
   }
 
-  const groupMembers = participants.map(p => p.id);
+    const metadata = await sock.groupMetadata(from);
+    const participants = metadata.participants;
+    const groupMembers = participants.map(p => p.id);
+
   const allVIP = [...vipList].filter(jid => groupMembers.includes(jid));
   const vipLain = allVIP.filter(v => v !== OWNER_NUMBER);
 
