@@ -1542,32 +1542,6 @@ if (msg.message?.extendedTextMessage?.contextInfo?.stanzaId) {
     return;
 }
 
-// 🔍 CEK JAWABAN KUIS (Reply)
-if (msg.message?.extendedTextMessage?.contextInfo?.stanzaId) {
-    const replyId = msg.message.extendedTextMessage.contextInfo.stanzaId;
-    const sesi = sesiKuis.get(replyId);
-
-    if (sesi) {
-        clearTimeout(sesi.timeout);
-        sesiKuis.delete(replyId);
-
-        const userAnswer = text.trim().toUpperCase();
-        if (['A', 'B', 'C', 'D'].includes(userAnswer)) {
-            if (userAnswer === sesi.jawaban) {
-                tambahSkor(sender, 10);
-                await sock.sendMessage(from, {
-                    text: `✅ *Benar!* Jawabanmu adalah *${userAnswer}* 🎉\n🏆 Kamu mendapatkan *10 poin!*\n\nMau lagi? Ketik *.kuis*`
-                });
-            } else {
-                await sock.sendMessage(from, {
-                    text: `❌ *Salah!* Jawabanmu: *${userAnswer}*\n✅ Jawaban benar: *${sesi.jawaban}*\nKetik *.kuis* untuk mencoba lagi.`
-                });
-            }
-        }
-        return;
-    }
-}
-
 const sesiKuisSusah = new Map();
 if (text.trim() === '.kuissusah') {
     const soal = ambilSoalAcak('kuissusah', soalKuisSusah);
@@ -1593,19 +1567,39 @@ if (text.trim() === '.kuissusah') {
     return;
 }
 
-// 🔍 CEK JAWABAN KUIS SUSAH (Reply)
+// 🔍 CEK SEMUA JAWABAN KUIS (biasa & susah)
 if (msg.message?.extendedTextMessage?.contextInfo?.stanzaId) {
     const replyId = msg.message.extendedTextMessage.contextInfo.stanzaId;
 
-    // Cek apakah ID reply adalah sesi kuis SUSAH
-    const sesi = sesiKuisSusah.get(replyId);
+    // 🔸 Cek dulu kuis biasa
+    if (sesiKuis.has(replyId)) {
+        const sesi = sesiKuis.get(replyId);
+        clearTimeout(sesi.timeout);
+        sesiKuis.delete(replyId);
 
-    if (sesi) {
+        const userAnswer = text.trim().toUpperCase();
+        if (['A', 'B', 'C', 'D'].includes(userAnswer)) {
+            if (userAnswer === sesi.jawaban) {
+                tambahSkor(sender, 10);
+                await sock.sendMessage(from, {
+                    text: `✅ *Benar!* Jawabanmu adalah *${userAnswer}* 🎉\n🏆 Kamu mendapatkan *10 poin!*\n\nMau lagi? Ketik *.kuis*`
+                });
+            } else {
+                await sock.sendMessage(from, {
+                    text: `❌ *Salah!* Jawabanmu: *${userAnswer}*\n✅ Jawaban benar: *${sesi.jawaban}*\nKetik *.kuis* untuk mencoba lagi.`
+                });
+            }
+        }
+        return;
+    }
+
+    // 🔸 Cek kuis SUSAH
+    if (sesiKuisSusah.has(replyId)) {
+        const sesi = sesiKuisSusah.get(replyId);
         clearTimeout(sesi.timeout);
         sesiKuisSusah.delete(replyId);
 
         const userAnswer = text.trim().toUpperCase();
-
         if (['A', 'B', 'C', 'D', 'E', 'F'].includes(userAnswer)) {
             if (userAnswer === sesi.jawaban) {
                 tambahSkor(sender, 30);
@@ -1613,7 +1607,7 @@ if (msg.message?.extendedTextMessage?.contextInfo?.stanzaId) {
                     text: `✅ *Benar!* Jawabanmu *${userAnswer}* memang luar biasa! 🎯\n🏆 Kamu mendapatkan *+30 poin!*\n\nMau coba lagi? Ketik *.kuissusah*`
                 });
             } else {
-                tambahSkor(sender, -50); // kurangi skor
+                tambahSkor(sender, -50); // kurangi 50
                 await sock.sendMessage(from, {
                     text: `❌ *Salah!* Jawabanmu: *${userAnswer}*\n✅ Jawaban benar: *${sesi.jawaban}*\n💥 *-50 poin!* Karena ini kuis susah!\n\nCoba lagi dengan *.kuissusah*`
                 });
