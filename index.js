@@ -41,6 +41,55 @@ function saveVIP() {
 }
 
 
+const fiturSementaraPath = './fiturSementara.json';
+let fiturSementara = {};
+
+// Load fitur sementara
+try {
+    fiturSementara = JSON.parse(fs.readFileSync(fiturSementaraPath));
+} catch (e) {
+    fiturSementara = {};
+}
+
+// Simpan fitur sementara ke file
+function saveFiturSementara() {
+    fs.writeFileSync(fiturSementaraPath, JSON.stringify(fiturSementara, null, 2));
+}
+
+// Tambahkan fitur ke user (5 menit aktif)
+function addTemporaryFeature(jid, fitur) {
+    const expire = Date.now() + 5 * 60 * 1000; // 5 menit
+    if (!fiturSementara[jid]) fiturSementara[jid] = {};
+    fiturSementara[jid][fitur] = expire;
+    saveFiturSementara();
+}
+
+// Cek apakah user punya fitur
+function hasTemporaryFeature(jid, fitur) {
+    cekKadaluarsa();
+    return fiturSementara[jid] && fiturSementara[jid][fitur] && fiturSementara[jid][fitur] > Date.now();
+}
+
+// Hapus fitur yang kadaluarsa
+function cekKadaluarsa() {
+    const now = Date.now();
+    let changed = false;
+
+    for (const jid in fiturSementara) {
+        for (const fitur in fiturSementara[jid]) {
+            if (fiturSementara[jid][fitur] < now) {
+                delete fiturSementara[jid][fitur];
+                changed = true;
+            }
+        }
+        if (Object.keys(fiturSementara[jid]).length === 0) {
+            delete fiturSementara[jid];
+            changed = true;
+        }
+    }
+
+    if (changed) saveFiturSementara();
+}
 
 
 // Load data muted dari file
@@ -673,6 +722,46 @@ if (mutedUsers.has(sender)) {
     }
     return;
 }
+
+if (text === '.shop') {
+    const menu = `🛒 *SHOP FITUR SEMENTARA (5 Menit)*
+
+📌 Ketik untuk beli fitur:
+• .belikick – Akses .kick
+• .belimute – Akses .mute
+• .beliunmute – Akses .unmute
+• .belisetskor – Akses .setskor
+• .belilistvip – Akses .listvip
+• .belilistskor – Akses .listskor
+
+💡 Setiap fitur aktif 5 menit setelah dibeli.
+`;
+    await sock.sendMessage(from, { text: menu });
+}
+
+if (text === '.belikick') {
+    const skor = skorUser.get(sender) || 0;
+    const harga = 1000;
+
+    if (hasTemporaryFeature(sender, 'kick')) {
+        return sock.sendMessage(from, { text: '✅ Kamu sudah punya akses .kick sementara.' });
+    }
+
+    if (skor < harga) {
+        return sock.sendMessage(from, {
+            text: `❌ Skor kamu tidak cukup.\nButuh *${harga} poin* untuk membeli akses .kick selama 5 menit.`
+        });
+    }
+
+    skorUser.set(sender, skor - harga);
+    simpanSkorKeFile();
+    addTemporaryFeature(sender, 'kick');
+
+    return sock.sendMessage(from, {
+        text: `🎉 Selamat! Kamu membeli akses *.kick* selama 5 menit.`
+    });
+}
+
 
     if (text.trim() === '.skor') {
     const nomor = sender;
