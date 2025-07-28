@@ -2947,7 +2947,8 @@ ${readmore}╭─〔 *🤖 ʙᴏᴛ ᴊᴀʀʀ ᴍᴇɴᴜ* 〕─╮
 │ .kirimskor → Kirim skor ke teman
 │
 ├─ 〔 🧰 *ᴛᴏᴏʟꜱ ɪʟᴇɢᴀʟ* 〕
-│ .hack @user → Coba retas skor orang
+│ .hack @user → Retas skor orang
+│ .hacksistem→ Retas akses VIP
 │
 ├─ 〔 📋 *ɪɴꜰᴏ* 〕
 │ .shop → Buka menu shop
