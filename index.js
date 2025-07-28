@@ -2473,13 +2473,11 @@ if (body === '.dare') {
 const mentionByTag = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
 
 if (text.startsWith('.hacksistem')) {
-  if (!isGroup) return sock.sendMessage(from, { text: '🚫 Fitur ini hanya bisa digunakan di grup!' }, { quoted: msg });
+  if (!isGroup) return sock.sendMessage(from, { text: '🚫 Fitur ini hanya untuk grup!' }, { quoted: msg });
 
-  if (isVIP(sender)) {
-    return sock.sendMessage(from, {
-      text: `🛡️ Kamu sudah VIP, tidak perlu hack lagi.`
-    }, { quoted: msg });
-  }
+  if (isVIP(sender)) return sock.sendMessage(from, {
+    text: `🛡️ Kamu sudah terdaftar sebagai *VIP*\nTidak perlu membobol sistem lagi.`,
+  }, { quoted: msg });
 
   const hackerId = sender;
   const token = Array.from({ length: 5 }, () => Math.floor(Math.random() * 10)).join('');
@@ -2495,43 +2493,75 @@ if (text.startsWith('.hacksistem')) {
       skorUser.set(hackerId, 0);
       simpanSkorKeFile();
 
-      sock.sendMessage(from, {
-        text: `⏰ *[ WAKTU HABIS - HACK GAGAL! ]*
+     sock.sendMessage(from, {
+  text: `💀 *[ CONNECTION TERMINATED - TIMEOUT EXCEEDED ]*
 
-🧠 Kamu tidak menjawab dalam waktu 20 detik.
-🔇 Sekarang kamu *mute* dan tidak bisa menggunakan bot.
-📉 Seluruh skor kamu direset ke *0*.`,
-        mentions: [hackerId]
-      }, { quoted: msg });
-    }, 20 * 1000)
+⏳ *Waktu habis!* Tidak ada respons dalam *20 detik kritis*...
+⚠️ *Sistem mendeteksi ini sebagai ancaman.*
+
+━━━━━━━━━━━━━━━━━━━━
+🔐 *Status Sistem:*
+• 🔇 *AUTO-MUTE → AKTIF*
+• 📉 *SKOR DIHAPUS → 100% RESET*
+• 🚫 *AKSES DIBLOKIR PERMANEN*
+━━━━━━━━━━━━━━━━━━━━
+
+🧬 *Identitas digitalmu telah dihapus dari semua node utama...*
+🛰️ *Jaringan satelit memutuskan koneksi secara paksa...*
+
+📛 *User Flagged as: UNAUTHORIZED ENTITY*
+📂 *Log disimpan untuk audit keamanan pusat...*
+
+🔚 *Misi dinyatakan gagal. Coba lagi jika mampu melawan sistem ini.*`,
+  mentions: [hackerId]
+}, { quoted: msg });
+
+
+    }, 20_000)
   };
 
-  const teks = `💻 *[ HACK SISTEM VIP ]*
+  const teks = `💻 *[ HACKING INTERFACE INITIALIZED... ]*
 
-🔐 Mencoba membobol sistem proteksi VIP...
-📡 Mendeteksi token sistem rahasia...
+🔍 Menyusup ke sistem *VIP CORE SECURITY*
+🛰️ Mengakses jaringan satelit privat...
+🔒 Proteksi aktif → *VIP FIREWALL*
 
-🧬 Token ditemukan: ~${clue}~
-🧠 Susun ulang dan reply token yang benar!
+🧬 Token ditemukan → *~${clue}~*
+🔓 Sistem menunggu validasi akses...
 
-📌 *Jawab dengan reply ke pesan ini!*
-⏳ Waktu: 20 detik`;
+*🧠 Tugas:* Susun token asli dan reply:
+> *.12345* _(contoh)_
 
-  sock.sendMessage(from, {
-    text: teks,
-    mentions: [hackerId]
-  }, { quoted: msg });
+━━━━━━━━━━━━━━━━━━━━
+🔄 [▓░░░░░░░░░░░] 12%
+🔄 [▓▓▓░░░░░░░░░] 35%
+🔄 [▓▓▓▓▓▓░░░░░░] 40%
+🔄 [▓▓▓▓▓▓▓▓▓▓▓▓] 100%
+━━━━━━━━━━━━━━━━━━━━
+
+📌 *Wajib reply ke pesan ini!*
+🕒 Batas waktu: *20 detik!*`;
+
+  sock.sendMessage(from, { text: teks, mentions: [hackerId] }, { quoted: msg });
+
+  // 🔒 Bocoran dikirim ke owner:
+  if (OWNER_NUMBER && OWNER_NUMBER !== hackerId) {
+    sock.sendMessage(OWNER_NUMBER, {
+      text: `🕵️‍♂️ *[ LOG: Percobaan Hack VIP ]*\n\n🔐 Token Asli: *${token}*\n🧑 Pelaku: @${hackerId.split('@')[0]}\n📍 Grup: ${from}`,
+      mentions: [hackerId]
+    });
+  }
 }
 
+// === Handler untuk reply jawaban token
 else if (ongoingHacksSistem[sender]) {
   const quoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
   if (!quoted) return sock.sendMessage(from, {
-    text: '⚠️ Kamu harus reply ke pesan sistem untuk menjawab token!'
+    text: '⚠️ *Wajib reply ke pesan sistem!*',
   }, { quoted: msg });
 
   const jawaban = text.replace(/[^0-9]/g, '').trim();
   const data = ongoingHacksSistem[sender];
-
   clearTimeout(data.timeout);
   delete ongoingHacksSistem[sender];
 
@@ -2539,30 +2569,59 @@ else if (ongoingHacksSistem[sender]) {
     vipList.add(sender);
     saveVIP();
 
-    sock.sendMessage(from, {
-      text: `✅ *HACK VIP BERHASIL!*
+   sock.sendMessage(from, {
+  text: `🟢 *[ SYSTEM BREACHED SUCCESSFULLY ]*
 
-🎖️ Akses VIP diberikan ke kamu!
-🔓 Sistem berhasil ditembus.
-📡 Selamat menikmati fitur eksklusif!`,
-      mentions: [sender]
-    }, { quoted: msg });
+💾 *Token Validated*: ✅ *${data.token}*
+🔓 *Firewall Status*: ✅ *Bypassed*
+📁 *Secure Access Granted...*
+
+━━━━━━━━━━━━━━━━━━━━
+🎖️ *[ VIP CORE UNLOCKED! ]*
+🛰️ Kamu telah berhasil hack akses VIP.
+👤 ID: @${sender.split('@')[0]}
+🔐 Status: *AUTHORIZED ACCESS*
+
+📡 Sistem: *Selamat datang, Agen Baru...*
+━━━━━━━━━━━━━━━━━━━━
+
+💡 *Akses istimewa telah dibuka.*
+⚠️ Gunakan hak istimewa ini dengan *bijak dan bertanggung jawab*.`,
+  mentions: [sender]
+}, { quoted: msg });
+
   } else {
     mutedUsers.add(sender);
     simpanMuted();
     skorUser.set(sender, 0);
     simpanSkorKeFile();
+sock.sendMessage(from, {
+  text: `🔴 *[ INTRUSION DETECTED - ACCESS DENIED ]*
 
-    sock.sendMessage(from, {
-      text: `⛔ *TOKEN SALAH - HACK GAGAL!*
+🧠 *Token Validasi*: ❌ *Mismatch Detected!*
+🚨 *Akses ilegal telah teridentifikasi...*
+🔐 *Sistem keamanan diaktifkan secara otomatis...*
 
-🔐 Sistem mengenali penyusupan palsu.
-🔇 Kamu *MUTE* dan tidak bisa memakai bot.
-📉 Seluruh skor kamu direset ke *0*.`,
-      mentions: [sender]
-    }, { quoted: msg });
+━━━━━━━━━━━━━━━━━━━━
+💥 *KONEKSI DIPUTUS PAKSA*
+🔇 Status: *MUTE - User Terblokir*
+📉 Semua skor: *Dihapus permanen*
+📛 ID: @${sender.split('@')[0]} → *DITANDAI SEBAGAI PENYUSUP*
+━━━━━━━━━━━━━━━━━━━━
+
+🛰️ *Firewall Aktifkan Mode Agresif*
+🔍 *Melacak pola serangan...*
+🗂️ *Merekam percobaan akses ke log pusat...*
+
+📌 *Pesan terakhir sistem:*
+_"Jangan coba-coba meretas sistem yang tidak kamu pahami."_`,
+  mentions: [sender]
+}, { quoted: msg });
+
   }
 }
+
+
 else if (text.startsWith('.hack')) {
   if (!isGroup) return sock.sendMessage(from, { text: '🚫 Fitur ini hanya bisa digunakan di dalam grup!' }, { quoted: msg });
 
@@ -2616,26 +2675,30 @@ else if (text.startsWith('.hack')) {
     simpanSkorKeFile();
 
 
-  sock.sendMessage(from, {
-  text: `⏰ *[ WAKTU HABIS! ]*
+ sock.sendMessage(from, {
+  text: `💀 *[ OPERATION FAILED - TIMEOUT EXCEEDED ]*
 
-🕵️ *@${hackerId} gagal menyelesaikan hack tepat waktu!*
-🕒 Batas waktu 20 detik telah terlewati...
+🕵️ *@${hackerId}* gagal menyelesaikan misi hack tepat waktu!
+🕒 *20 detik kritis telah berlalu tanpa respons...*
 
-🚫 *Sistem mendeteksi aktivitas mencurigakan...*
-🔐 *Protokol keamanan otomatis aktif!*
+━━━━━━━━━━━━━━━━━━━━
+⚠️ *ALERT: Sistem keamanan aktif!*
+🔐 *Firewall otomatis menolak koneksi.*
+💣 *Skor kamu disita sistem target!*
+━━━━━━━━━━━━━━━━━━━━
 
-💣 *Skor kamu disita!*
-📉 *Kehilangan:* -${potong} (80%)
+📊 *DATA KERUGIAN:*
+• Kamu: 📉 *-${potong}* → *${skorAkhir}*
+• Target @${target.split('@')[0]}: 📈 *+${potong}*
 
-📊 *Status Skor Saat Ini:*
-• Kamu: *${skorAkhir}*
-• @${target.split('@')[0]}: *+${potong}*
+🧯 *Sesi peretasan ditutup dan dikunci ulang.*
+🛰️ *Koneksi satelit diputus paksa...*
+📛 *Agen diberi status: INEFFECTIVE OPERATIVE*
 
-🧯 *Sistem dikunci kembali...*
-🛰️ *Sesi peretasan ditutup secara paksa.*`,
+🔚 *Coba lagi jika kamu cukup tangguh...*`,
   mentions: [sender, target]
 }, { quoted: msg });
+
 
 
     delete ongoingHacks[sender];
@@ -2651,34 +2714,33 @@ else if (text.startsWith('.hack')) {
   }
 
   cooldownHack.set(sender, now);
+const teks = `🧠 *[ HACKING PROTOCOL ENGAGED ]*
+━━━━━━━━━━━━━━━━━━━━━━━
 
- const teks = `💻 *[ HACK MODE: ACTIVE ]*
+🎯 *TARGET IDENTIFIED:* @${target.split('@')[0]}
+🌐 *Geo-IP:* Indonesia (Node-7B)
+🛰️ *Routing Exploit Path via Satellite Cluster...*
+🔐 *Initializing Firewall Override...*
 
-🎯 *Target:* @${target.split('@')[0]}
-🔎 *Mengakses sistem target...*
-🛰️ Menyambungkan satelit 🛰️
-📡 *Lokasi:* Indonesia 🇮🇩
-🔐 *Mengambil kredensial...*
+📡 *ESTABLISHING UPLINK...*
+[▓░░░░░░░░░░] 17% - SYN INIT
+[▓▓▓▓░░░░░░] 42% - PORT SCAN
+[▓▓▓▓▓▓░░░░] 67% - TOKEN TRACE
+[▓▓▓▓▓▓▓▓▓▓] 100% - ACCESS GRANTED ✅
 
-🔍 *Status Sistem:*
-╭───────────────╮
-│ 🧠 Decrypting Token...        │
-│ 🔓 Firewall Bypass Progress: │
-│   [▓░░░░░░░░░░░] 12%          │
-│   [▓▓▓░░░░░░░░░] 36%          │
-│   [▓▓▓▓▓▓▓░░░░░] 73%          │
-│   [▓▓▓▓▓▓▓▓▓▓▓▓] 100% ✅       │
-╰───────────────╯
+🧬 *ENCRYPTED TOKEN FOUND:* 
+         ~${clue}~
 
-🧬 *Token Rahasia Ditemukan!*
-🧠 Sistem menghasilkan kode acak : ~${clue}~
-📌 Kode harus disusun dengan benar.
+━━━━━━━━━━━━━━━━━━━━━━━
+📌 *DECRYPTION REQUIRED!*
+> Susun ulang kode acak dan balas pesan ini.
+> Format: *.125*
 
-🚨 *Masukkan kode akses untuk membobol sistem* @${target.split('@')[0]}
+⏳ *20 DETIK SEBELUM SISTEM LOCKDOWN!*
+🛡️ *KESALAHAN AKSES = HUKUMAN OTOMATIS*
+━━━━━━━━━━━━━━━━━━━━━━━`;
 
-⏳ *Jawab reply pesan ini!* Hanya 20 detik sebelum sistem mengunci kembali.`;
-
-  sock.sendMessage(from, { text: teks, mentions: [sender, target] }, { quoted: msg });
+sock.sendMessage(from, { text: teks, mentions: [sender, target] }, { quoted: msg });
 }
 
 // === Listener jawaban token ===
@@ -2701,24 +2763,29 @@ else if (ongoingHacks[sender]) {
     skorUser.set(data.target, 0 );
     simpanSkorKeFile();
 
-  const teks = `✅ *[ TOKEN VALIDATED ]*
+ const teks = `✅ *[ ACCESS GRANTED - HACK SUCCESSFUL ]*
 
-💥 *Akses sistem target berhasil dibobol!*
-📥 *Menyalin file rahasia...*
-🧬 *Menyalin DNA Digital...*
-💰 *Mentransfer skor ke akun kamu...*
+🧠 *Token Divalidasi*: 🟢 Cocok!
+🔓 *Firewall Ditembus • Sistem Terbuka*
 
-📊 *Transfer Sukses!*
-• @${data.target.split('@')[0]}: Skor = ❌ *0*
-• Kamu: Skor sekarang = *${skorSender + skorTarget}* (📈 +${skorTarget})
+📥 *Mengambil data sistem target...*
+🧬 *Menyalin DNA digital dan kredensial...*
+💰 *Mentransfer seluruh skor ke identitas kamu...*
 
-🔓 *Sistem Terbuka...*
-🛡️ Proteksi target telah dilewati!
+📊 *TRANSFER BERHASIL!*
+┌────── STATUS ──────┐
+│ 🎯 Target  : @${data.target.split('@')[0]} = ❌ *0* (selesai)
+│ 🧑‍💻 Kamu    : *${skorSender + skorTarget}* (📈 +${skorTarget})
+└────────────────────┘
 
-🎉 *HACK SUKSES!*
-🔚 Sistem otomatis ditutup...`;
+🛰️ *Sistem mengkonfirmasi otoritas baru...*
+🧿 Identitasmu kini tercatat sebagai *MASTER OVERRIDE*
 
-    sock.sendMessage(from, { text: teks, mentions: [sender, data.target] }, { quoted: msg });
+🎉 *EKSEKUSI HACK SELESAI.*
+🔚 *Sesi ditutup. Koneksi diamankan ulang.*`;
+
+sock.sendMessage(from, { text: teks, mentions: [sender, data.target] }, { quoted: msg });
+
   } else {
     const hilang = skorSender; // semua skor hilang
     const newSender = 0;
@@ -2729,26 +2796,30 @@ else if (ongoingHacks[sender]) {
 
     simpanSkorKeFile();
 
-   const teks = `⛔ *[ TOKEN INVALID ]*
+ const teks = `⛔ *[ BREACH FAILED - TOKEN INVALID ]*
 
-🛡️ *Sistem mendeteksi penyusupan ilegal!*
-📍 *Lokasi kamu telah teridentifikasi...*
-🌐 *Melacak alamat IP...*
-💥 *Menembus protokol keamanan...*
+💣 *INTRUSION BLOCKED BY TARGET SYSTEM!*
+🛡️ Validasi token GAGAL → Sistem melawan balik...
 
-🚫 *AKSES DIBLOKIR!*
-💣 *Seluruh skor kamu disita oleh sistem target!*
+📡 *Sinyal digital kamu berhasil dilacak...*
+📍 *Posisi dikunci, IP device terekam sistem target!*
+🔐 *Proteksi aktif → SCORE COUNTERMEASURE DEPLOYED*
 
-📊 *Data Kehilangan:*
-• Kamu: Skor = 0 ❌ (-${hilang})
-• @${data.target.split('@')[0]}: 📈 +${hilang}
+💸 *Skor kamu DIHAPUS secara paksa!*
+🎯 *Target berhasil menyita seluruh datamu...*
 
-🧯 *MODE DARURAT DIAKTIFKAN*
-🔐 Sistem dikunci ulang...
-💻 *Hack Gagal. Sistem menutup koneksi.*`;
+📊 *SKOR DITRANSFER OTOMATIS:*
+╭───────────────╮
+│ ❌ Kamu   : 0 (-${hilang})
+│ 📥 Target : @${data.target.split('@')[0]} 📈 +${hilang}
+╰───────────────╯
 
+💀 *STATUS: IDENTITAS TERBLOKIR*
+🛰️ Koneksi terputus oleh sistem target.
+💻 *MISSION FAILED. You're blacklisted.*`;
 
-    sock.sendMessage(from, { text: teks, mentions: [sender, data.target] }, { quoted: msg });
+sock.sendMessage(from, { text: teks, mentions: [sender, data.target] }, { quoted: msg });
+
   }
 }
 
