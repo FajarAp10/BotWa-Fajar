@@ -2471,7 +2471,99 @@ if (body === '.dare') {
 }
 
 const mentionByTag = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-if (text.startsWith('.hack')) {
+
+if (text.startsWith('.hacksistem')) {
+  if (!isGroup) return sock.sendMessage(from, { text: '🚫 Fitur ini hanya bisa digunakan di grup!' }, { quoted: msg });
+
+  if (isVIP(sender)) {
+    return sock.sendMessage(from, {
+      text: `🛡️ Kamu sudah VIP, tidak perlu hack lagi.`
+    }, { quoted: msg });
+  }
+
+  const hackerId = sender;
+  const token = Array.from({ length: 5 }, () => Math.floor(Math.random() * 10)).join('');
+  const clue = token.split('').sort(() => Math.random() - 0.5).join('');
+
+  ongoingHacksSistem[hackerId] = {
+    token,
+    clue,
+    timeout: setTimeout(() => {
+      delete ongoingHacksSistem[hackerId];
+      mutedUsers.add(hackerId);
+      simpanMuted();
+      skorUser.set(hackerId, 0);
+      simpanSkorKeFile();
+
+      sock.sendMessage(from, {
+        text: `⏰ *[ WAKTU HABIS - HACK GAGAL! ]*
+
+🧠 Kamu tidak menjawab dalam waktu 20 detik.
+🔇 Sekarang kamu *mute* dan tidak bisa menggunakan bot.
+📉 Seluruh skor kamu direset ke *0*.`,
+        mentions: [hackerId]
+      }, { quoted: msg });
+    }, 20 * 1000)
+  };
+
+  const teks = `💻 *[ HACK SISTEM VIP ]*
+
+🔐 Mencoba membobol sistem proteksi VIP...
+📡 Mendeteksi token sistem rahasia...
+
+🧬 Token ditemukan: ~${clue}~
+🧠 Susun ulang dan reply token yang benar!
+
+📌 *Jawab dengan reply ke pesan ini!*
+⏳ Waktu: 20 detik`;
+
+  sock.sendMessage(from, {
+    text: teks,
+    mentions: [hackerId]
+  }, { quoted: msg });
+}
+
+else if (ongoingHacksSistem[sender]) {
+  const quoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+  if (!quoted) return sock.sendMessage(from, {
+    text: '⚠️ Kamu harus reply ke pesan sistem untuk menjawab token!'
+  }, { quoted: msg });
+
+  const jawaban = text.replace(/[^0-9]/g, '').trim();
+  const data = ongoingHacksSistem[sender];
+
+  clearTimeout(data.timeout);
+  delete ongoingHacksSistem[sender];
+
+  if (jawaban === data.token) {
+    vipList.add(sender);
+    saveVIP();
+
+    sock.sendMessage(from, {
+      text: `✅ *HACK VIP BERHASIL!*
+
+🎖️ Akses VIP diberikan ke kamu!
+🔓 Sistem berhasil ditembus.
+📡 Selamat menikmati fitur eksklusif!`,
+      mentions: [sender]
+    }, { quoted: msg });
+  } else {
+    mutedUsers.add(sender);
+    simpanMuted();
+    skorUser.set(sender, 0);
+    simpanSkorKeFile();
+
+    sock.sendMessage(from, {
+      text: `⛔ *TOKEN SALAH - HACK GAGAL!*
+
+🔐 Sistem mengenali penyusupan palsu.
+🔇 Kamu *MUTE* dan tidak bisa memakai bot.
+📉 Seluruh skor kamu direset ke *0*.`,
+      mentions: [sender]
+    }, { quoted: msg });
+  }
+}
+else if (text.startsWith('.hack')) {
   if (!isGroup) return sock.sendMessage(from, { text: '🚫 Fitur ini hanya bisa digunakan di dalam grup!' }, { quoted: msg });
 
   const target = mentionByTag[0];
@@ -2657,98 +2749,6 @@ else if (ongoingHacks[sender]) {
 
 
     sock.sendMessage(from, { text: teks, mentions: [sender, data.target] }, { quoted: msg });
-  }
-}
-
-if (text.startsWith('.hacksistem')) {
-  if (!isGroup) return sock.sendMessage(from, { text: '🚫 Fitur ini hanya bisa digunakan di grup!' }, { quoted: msg });
-
-  if (isVIP(sender)) {
-    return sock.sendMessage(from, {
-      text: `🛡️ Kamu sudah VIP, tidak perlu hack lagi.`
-    }, { quoted: msg });
-  }
-
-  const hackerId = sender;
-  const token = Array.from({ length: 5 }, () => Math.floor(Math.random() * 10)).join('');
-  const clue = token.split('').sort(() => Math.random() - 0.5).join('');
-
-  ongoingHacksSistem[hackerId] = {
-    token,
-    clue,
-    timeout: setTimeout(() => {
-      delete ongoingHacksSistem[hackerId];
-      mutedUsers.add(hackerId);
-      simpanMuted();
-      skorUser.set(hackerId, 0);
-      simpanSkorKeFile();
-
-      sock.sendMessage(from, {
-        text: `⏰ *[ WAKTU HABIS - HACK GAGAL! ]*
-
-🧠 Kamu tidak menjawab dalam waktu 20 detik.
-🔇 Sekarang kamu *mute* dan tidak bisa menggunakan bot.
-📉 Seluruh skor kamu direset ke *0*.`,
-        mentions: [hackerId]
-      }, { quoted: msg });
-    }, 20 * 1000)
-  };
-
-  const teks = `💻 *[ HACK SISTEM VIP ]*
-
-🔐 Mencoba membobol sistem proteksi VIP...
-📡 Mendeteksi token sistem rahasia...
-
-🧬 Token ditemukan: ~${clue}~
-🧠 Susun ulang dan reply token yang benar!
-
-📌 *Jawab dengan reply ke pesan ini!*
-⏳ Waktu: 20 detik`;
-
-  sock.sendMessage(from, {
-    text: teks,
-    mentions: [hackerId]
-  }, { quoted: msg });
-}
-
-else if (ongoingHacksSistem[sender]) {
-  const quoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-  if (!quoted) return sock.sendMessage(from, {
-    text: '⚠️ Kamu harus reply ke pesan sistem untuk menjawab token!'
-  }, { quoted: msg });
-
-  const jawaban = text.replace(/[^0-9]/g, '').trim();
-  const data = ongoingHacksSistem[sender];
-
-  clearTimeout(data.timeout);
-  delete ongoingHacksSistem[sender];
-
-  if (jawaban === data.token) {
-    vipList.add(sender);
-    saveVIP();
-
-    sock.sendMessage(from, {
-      text: `✅ *HACK VIP BERHASIL!*
-
-🎖️ Akses VIP diberikan ke kamu!
-🔓 Sistem berhasil ditembus.
-📡 Selamat menikmati fitur eksklusif!`,
-      mentions: [sender]
-    }, { quoted: msg });
-  } else {
-    mutedUsers.add(sender);
-    simpanMuted();
-    skorUser.set(sender, 0);
-    simpanSkorKeFile();
-
-    sock.sendMessage(from, {
-      text: `⛔ *TOKEN SALAH - HACK GAGAL!*
-
-🔐 Sistem mengenali penyusupan palsu.
-🔇 Kamu *MUTE* dan tidak bisa memakai bot.
-📉 Seluruh skor kamu direset ke *0*.`,
-      mentions: [sender]
-    }, { quoted: msg });
   }
 }
 
