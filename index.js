@@ -417,6 +417,8 @@ const soalKuis = [
 
 const sesiKuis = new Map(); 
 const sesiKuisSusah = new Map();
+const ongoingHacksSistem = {};
+
 
 const soalKuisSusah = [
   { soal: "Siapa penemu teori relativitas umum?", pilihan: ["A. Newton", "B. Einstein", "C. Bohr", "D. Galileo", "E. Tesla", "F. Hawking"], jawaban: "B" },
@@ -2658,81 +2660,93 @@ else if (ongoingHacks[sender]) {
   }
 }
 
-
-// 4. Tambahkan Handler .hacksistem
 if (text.startsWith('.hacksistem')) {
-  if (!isGroup) return sock.sendMessage(from, { text: '🚫 Fitur ini hanya untuk grup!' }, { quoted: msg });
+  if (!isGroup) return sock.sendMessage(from, { text: '🚫 Fitur ini hanya bisa digunakan di grup!' }, { quoted: msg });
 
-  const target = mentionByTag[0];
-  if (!target) return sock.sendMessage(from, { text: '❗ Tag target *@user* untuk hack sistem VIP!' }, { quoted: msg });
-  if (isOwner(target)) return sock.sendMessage(from, { text: '🚫 Target adalah Owner. Tidak bisa di-hack!' }, { quoted: msg });
+  if (isVIP(sender)) {
+    return sock.sendMessage(from, {
+      text: `🛡️ Kamu sudah VIP, tidak perlu hack lagi.`
+    }, { quoted: msg });
+  }
 
   const hackerId = sender;
   const token = Array.from({ length: 5 }, () => Math.floor(Math.random() * 10)).join('');
   const clue = token.split('').sort(() => Math.random() - 0.5).join('');
 
-  ongoingHacksistem = ongoingHacksistem || {};
-  ongoingHacksistem[hackerId] = {
+  ongoingHacksSistem[hackerId] = {
     token,
     clue,
     timeout: setTimeout(() => {
-      delete ongoingHacksistem[hackerId];
-      mutedList.push(hackerId);
+      delete ongoingHacksSistem[hackerId];
+      mutedUsers.add(hackerId);
       simpanMuted();
       skorUser.set(hackerId, 0);
       simpanSkorKeFile();
 
       sock.sendMessage(from, {
-        text: `⏰ *[ WAKTU HABIS! HACK VIP GAGAL ]*
+        text: `⏰ *[ WAKTU HABIS - HACK GAGAL! ]*
 
-🚫 Kamu tidak menjawab tepat waktu!
-🔇 Kamu sekarang *MUTE* dan tidak bisa menggunakan bot!
-📉 Seluruh skor kamu hilang.`,
+🧠 Kamu tidak menjawab dalam waktu 20 detik.
+🔇 Sekarang kamu *mute* dan tidak bisa menggunakan bot.
+📉 Seluruh skor kamu direset ke *0*.`,
         mentions: [hackerId]
       }, { quoted: msg });
-    }, 20000) // 20 detik
+    }, 20 * 1000)
   };
 
-  const teks = `💻 *[ HACK SISTEM VIP MODE ]*
+  const teks = `💻 *[ HACK SISTEM VIP ]*
 
-🎯 Target: @${target.split('@')[0]}
-🔐 Sistem keamanan dilindungi oleh VIP Firewall
+🔐 Mencoba membobol sistem proteksi VIP...
+📡 Mendeteksi token sistem rahasia...
 
-🧠 Token 5 digit acak ditemukan: ~${clue}~
-🚨 *Reply dengan token yang benar dalam 20 detik!*
-Contoh: *.${token}*`;
+🧬 Token ditemukan: ~${clue}~
+🧠 Susun ulang dan reply token yang benar!
 
-  sock.sendMessage(from, { text: teks, mentions: [target, hackerId] }, { quoted: msg });
+📌 *Jawab dengan reply ke pesan ini!*
+⏳ Waktu: 20 detik`;
+
+  sock.sendMessage(from, {
+    text: teks,
+    mentions: [hackerId]
+  }, { quoted: msg });
 }
 
-// 5. Listener Balasan Token
-if (ongoingHacksistem?.[sender]) {
+else if (ongoingHacksSistem[sender]) {
+  const quoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+  if (!quoted) return sock.sendMessage(from, {
+    text: '⚠️ Kamu harus reply ke pesan sistem untuk menjawab token!'
+  }, { quoted: msg });
+
   const jawaban = text.replace(/[^0-9]/g, '').trim();
-  const data = ongoingHacksistem[sender];
+  const data = ongoingHacksSistem[sender];
+
   clearTimeout(data.timeout);
-  delete ongoingHacksistem[sender];
+  delete ongoingHacksSistem[sender];
 
   if (jawaban === data.token) {
-    if (!vipList.includes(sender)) vipList.push(sender);
-    simpanVIP();
+    vipList.add(sender);
+    saveVIP();
+
     sock.sendMessage(from, {
       text: `✅ *HACK VIP BERHASIL!*
 
-🎖️ Kamu sekarang memiliki akses *VIP*
-🔓 Proteksi sistem berhasil dibobol!`,
+🎖️ Akses VIP diberikan ke kamu!
+🔓 Sistem berhasil ditembus.
+📡 Selamat menikmati fitur eksklusif!`,
       mentions: [sender]
     }, { quoted: msg });
   } else {
-    mutedList.push(sender);
+    mutedUsers.add(sender);
     simpanMuted();
     skorUser.set(sender, 0);
     simpanSkorKeFile();
 
     sock.sendMessage(from, {
-      text: `⛔ *TOKEN SALAH!*
+      text: `⛔ *TOKEN SALAH - HACK GAGAL!*
 
-🔐 Sistem mengenali penyusupan ilegal.
-🔇 Kamu sekarang *MUTE* dan skor kamu direset ke 0.`,
+🔐 Sistem mengenali penyusupan palsu.
+🔇 Kamu *MUTE* dan tidak bisa memakai bot.
+📉 Seluruh skor kamu direset ke *0*.`,
       mentions: [sender]
     }, { quoted: msg });
   }
