@@ -2479,6 +2479,17 @@ if (text.startsWith('.hacksistem')) {
     text: `🛡️ Kamu sudah terdaftar sebagai *VIP*\nTidak perlu membobol sistem lagi.`,
   }, { quoted: msg });
 
+  const now = Date.now();
+  const last = cooldownHack.get(sender); // pakai cooldownHack Map YANG SUDAH ADA
+  if (last && now - last < COOLDOWN_TIME) {
+    const wait = Math.ceil((COOLDOWN_TIME - (now - last)) / 60000);
+    return sock.sendMessage(from, {
+      text: `🕒 *[ COOLDOWN AKTIF ]*\n\n🚫 Tunggu *${wait} menit* lagi sebelum mencoba hack sistem kembali.`,
+    }, { quoted: msg });
+  }
+
+  cooldownHack.set(sender, now); // pasang cooldown setelah lewat cek
+
   const hackerId = sender;
   const token = Array.from({ length: 5 }, () => Math.floor(Math.random() * 10)).join('');
   const clue = token.split('').sort(() => Math.random() - 0.5).join('');
@@ -2719,25 +2730,23 @@ const teks = `🧠 *[ HACKING PROTOCOL ENGAGED ]*
 
 🎯 *TARGET IDENTIFIED:* @${target.split('@')[0]}
 🌐 *Geo-IP:* Indonesia (Node-7B)
-🛰️ *Routing Exploit Path via Satellite Cluster...*
+🛰️ *Routing Exploit Cluster...*
 🔐 *Initializing Firewall Override...*
 
 📡 *ESTABLISHING UPLINK...*
-[▓░░░░░░░░░░] 17% - SYN INIT
-[▓▓▓▓░░░░░░] 42% - PORT SCAN
-[▓▓▓▓▓▓░░░░] 67% - TOKEN TRACE
-[▓▓▓▓▓▓▓▓▓▓] 100% - ACCESS GRANTED ✅
+[▓░░░░░░░░░░] 17% 
+[▓▓▓▓░░░░░░░] 42% 
+[▓▓▓▓▓▓░░░░░] 67% 
+[▓▓▓▓▓▓▓▓▓▓▓] 100% ✅
 
-🧬 *ENCRYPTED TOKEN FOUND:* 
+🧬 *ENCRYPTED TOKEN FOUND:  ~${clue}~* 
          ~${clue}~
-
 ━━━━━━━━━━━━━━━━━━━━━━━
 📌 *DECRYPTION REQUIRED!*
 > Susun ulang kode acak dan balas pesan ini.
 > Format: *.125*
 
 ⏳ *20 DETIK SEBELUM SISTEM LOCKDOWN!*
-🛡️ *KESALAHAN AKSES = HUKUMAN OTOMATIS*
 ━━━━━━━━━━━━━━━━━━━━━━━`;
 
 sock.sendMessage(from, { text: teks, mentions: [sender, target] }, { quoted: msg });
@@ -2779,10 +2788,10 @@ else if (ongoingHacks[sender]) {
 └────────────────────┘
 
 🛰️ *Sistem mengkonfirmasi otoritas baru...*
-🧿 Identitasmu kini tercatat sebagai *MASTER OVERRIDE*
+🧿 Identitasmu kini sebagai *MASTER OVERRIDE*
 
 🎉 *EKSEKUSI HACK SELESAI.*
-🔚 *Sesi ditutup. Koneksi diamankan ulang.*`;
+🔚 *Koneksi diamankan ulang.*`;
 
 sock.sendMessage(from, { text: teks, mentions: [sender, data.target] }, { quoted: msg });
 
