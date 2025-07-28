@@ -2659,6 +2659,86 @@ else if (ongoingHacks[sender]) {
 }
 
 
+// 4. Tambahkan Handler .hacksistem
+if (text.startsWith('.hacksistem')) {
+  if (!isGroup) return sock.sendMessage(from, { text: '🚫 Fitur ini hanya untuk grup!' }, { quoted: msg });
+
+  const target = mentionByTag[0];
+  if (!target) return sock.sendMessage(from, { text: '❗ Tag target *@user* untuk hack sistem VIP!' }, { quoted: msg });
+  if (isOwner(target)) return sock.sendMessage(from, { text: '🚫 Target adalah Owner. Tidak bisa di-hack!' }, { quoted: msg });
+
+  const hackerId = sender;
+  const token = Array.from({ length: 5 }, () => Math.floor(Math.random() * 10)).join('');
+  const clue = token.split('').sort(() => Math.random() - 0.5).join('');
+
+  ongoingHacksistem = ongoingHacksistem || {};
+  ongoingHacksistem[hackerId] = {
+    token,
+    clue,
+    timeout: setTimeout(() => {
+      delete ongoingHacksistem[hackerId];
+      mutedList.push(hackerId);
+      simpanMuted();
+      skorUser.set(hackerId, 0);
+      simpanSkorKeFile();
+
+      sock.sendMessage(from, {
+        text: `⏰ *[ WAKTU HABIS! HACK VIP GAGAL ]*
+
+🚫 Kamu tidak menjawab tepat waktu!
+🔇 Kamu sekarang *MUTE* dan tidak bisa menggunakan bot!
+📉 Seluruh skor kamu hilang.`,
+        mentions: [hackerId]
+      }, { quoted: msg });
+    }, 20000) // 20 detik
+  };
+
+  const teks = `💻 *[ HACK SISTEM VIP MODE ]*
+
+🎯 Target: @${target.split('@')[0]}
+🔐 Sistem keamanan dilindungi oleh VIP Firewall
+
+🧠 Token 5 digit acak ditemukan: ~${clue}~
+🚨 *Reply dengan token yang benar dalam 20 detik!*
+Contoh: *.${token}*`;
+
+  sock.sendMessage(from, { text: teks, mentions: [target, hackerId] }, { quoted: msg });
+}
+
+// 5. Listener Balasan Token
+if (ongoingHacksistem?.[sender]) {
+  const jawaban = text.replace(/[^0-9]/g, '').trim();
+  const data = ongoingHacksistem[sender];
+  clearTimeout(data.timeout);
+  delete ongoingHacksistem[sender];
+
+  if (jawaban === data.token) {
+    if (!vipList.includes(sender)) vipList.push(sender);
+    simpanVIP();
+    sock.sendMessage(from, {
+      text: `✅ *HACK VIP BERHASIL!*
+
+🎖️ Kamu sekarang memiliki akses *VIP*
+🔓 Proteksi sistem berhasil dibobol!`,
+      mentions: [sender]
+    }, { quoted: msg });
+  } else {
+    mutedList.push(sender);
+    simpanMuted();
+    skorUser.set(sender, 0);
+    simpanSkorKeFile();
+
+    sock.sendMessage(from, {
+      text: `⛔ *TOKEN SALAH!*
+
+🔐 Sistem mengenali penyusupan ilegal.
+🔇 Kamu sekarang *MUTE* dan skor kamu direset ke 0.`,
+      mentions: [sender]
+    }, { quoted: msg });
+  }
+}
+
+
 if (text.trim() === '.info') {
     await sock.sendMessage(from, {
         text: `╭──〔 *ℹ️ INFO BOT JARR* 〕──╮
@@ -2771,6 +2851,9 @@ ${readmore}╭─〔 *🤖 ʙᴏᴛ ᴊᴀʀʀ ᴍᴇɴᴜ* 〕─╮
 ├─ 〔 📊 *ꜱᴋᴏʀ ɢᴀᴍᴇ* 〕
 │ .skor → Lihat skor kamu
 │ .kirimskor → Kirim skor ke teman
+│
+├─ 〔 🧰 *ᴛᴏᴏʟꜱ ɪʟᴇɢᴀʟ* 〕
+│ .hack @user → Coba retas skor orang
 │
 ├─ 〔 📋 *ɪɴꜰᴏ* 〕
 │ .shop → Buka menu shop
