@@ -13,6 +13,9 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const moment = require('moment-timezone');
+const sharp = require('sharp');
+const mime = require('mime-types');
+
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const ongoingHacks = {};
 const cooldownHack = new Map();
@@ -22,31 +25,66 @@ const COOLDOWN_TIME = 10 * 60 * 1000; // 10 menit
 
 // Gunakan auth tunggal agar file login bisa disimpan di GitHub/Railway
 
-  const OWNER_NUMBER = "6283836348226@s.whatsapp.net";
+  const OWNER_NUMBER = '6283836348226@s.whatsapp.net'
+  const PROXY_NUMBER = '6291100802986027@s.whatsapp.net'; // nomor kamu di grup
   const BOT_NUMBER = '62882007141574@s.whatsapp.net';
 
+  const ALIAS_OWNER = {
+  '6291100802986027@s.whatsapp.net': '6283836348226@s.whatsapp.net' // nomor acak ➜ nomor asli
+};
+
+
+function normalizeJid(jid) {
+    if (!jid || typeof jid !== 'string') return '';
+
+    if (ALIAS_OWNER[jid]) return ALIAS_OWNER[jid]; // ← map nomor acak ke nomor asli
+
+    if (jid.endsWith('@s.whatsapp.net') || jid.endsWith('@g.us')) return jid;
+
+    const numMatch = jid.match(/\d{7,}/);
+    if (!numMatch) return jid;
+
+    let number = numMatch[0];
+    if (!number.startsWith('62')) number = '62' + number.replace(/^0+/, '');
+
+    return number + '@s.whatsapp.net';
+}
+
 const vipPath = './vip.json';
-let vipList = new Set();
+let vipList = {}; // jadi object per grup
 
 // Load VIP
 try {
-    const vipData = JSON.parse(fs.readFileSync(vipPath));
-    vipList = new Set(vipData.vips);
+    vipList = JSON.parse(fs.readFileSync(vipPath));
 } catch {
-    vipList = new Set();
+    vipList = {};
 }
 
-// Fungsi cek dan simpan
-function isVIP(jid) {
-    return vipList.has(jid) || jid === OWNER_NUMBER;
+function isVIP(jid, groupId) {
+    const realJid = normalizeJid(jid);
+    if (realJid === OWNER_NUMBER) return true;
+    if (!vipList[groupId]) return false;
+    return vipList[groupId].includes(realJid);
 }
+
+
 
 function isOwner(jid) {
-    return jid === OWNER_NUMBER;
+  const real = normalizeJid(jid);
+  return real === OWNER_NUMBER || real === PROXY_NUMBER;
+}
+
+function addVIP(jid, groupId) {
+    const realJid = normalizeJid(jid);
+    if (!vipList[groupId]) vipList[groupId] = [];
+    if (!vipList[groupId].includes(realJid)) {
+        vipList[groupId].push(realJid);
+        saveVIP();
+    }
 }
 
 function saveVIP() {
-    fs.writeFileSync(vipPath, JSON.stringify({ vips: [...vipList] }, null, 2));
+    fs.writeFileSync(vipPath, JSON.stringify(vipList, null, 2));
 }
 
 
@@ -59,6 +97,7 @@ try {
 } catch (e) {
     fiturSementara = {};
 }
+
 
 // Simpan fitur sementara ke file
 function saveFiturSementara() {
@@ -98,8 +137,8 @@ function cekKadaluarsa(sock) {
             `📌 Ketik *.shop* untuk melihat daftar fitur.`;
 
           sock.sendMessage(data.groupId, {
-            text: teks,
-            mentions: [jid]
+          text: teks,
+          mentions: [jid]
           }).catch(err => {
             console.error('❌ Gagal kirim pesan kadaluarsa:', err);
           });
@@ -124,18 +163,37 @@ function cekKadaluarsa(sock) {
 
 
 // Load data muted dari file
-let mutedUsers = new Set();
+let mutedUsers = {};
 try {
     const data = fs.readFileSync('./muted.json');
-    mutedUsers = new Set(JSON.parse(data));
+    mutedUsers = JSON.parse(data);
 } catch (e) {
     console.log('Gagal membaca file muted.json:', e);
 }
 
-// Fungsi simpan mute ke file
 function simpanMuted() {
-    fs.writeFileSync('./muted.json', JSON.stringify([...mutedUsers], null, 2));
+    fs.writeFileSync('./muted.json', JSON.stringify(mutedUsers, null, 2));
 }
+
+function isMuted(userId, groupId) {
+    return mutedUsers[groupId]?.includes(userId);
+}
+
+function muteUser(userId, groupId) {
+    if (!mutedUsers[groupId]) mutedUsers[groupId] = [];
+    if (!mutedUsers[groupId].includes(userId)) mutedUsers[groupId].push(userId);
+    simpanMuted();
+}
+
+function unmuteUser(userId, groupId) {
+    if (mutedUsers[groupId]) {
+        mutedUsers[groupId] = mutedUsers[groupId].filter(id => id !== userId);
+        simpanMuted();
+    }
+}
+
+
+
 const grupPath = './grupAktif.json';
 
 function simpanGrupAktif() {
@@ -151,17 +209,34 @@ try {
 }
 
 const skorPath = './skor.json';
+let skorUser = {}; // jadi object per grup
 
 function simpanSkorKeFile() {
-    fs.writeFileSync(skorPath, JSON.stringify(Object.fromEntries(skorUser), null, 2));
+    fs.writeFileSync(skorPath, JSON.stringify(skorUser, null, 2));
 }
 
+
 try {
-    const data = JSON.parse(fs.readFileSync('./skor.json'));
-    skorUser = new Map(Object.entries(data));
+    skorUser = JSON.parse(fs.readFileSync(skorPath));
 } catch {
     console.log('📁 skor.json belum ada, akan dibuat otomatis.');
+    skorUser = {};
 }
+
+function getGroupSkor(jid, groupId) {
+    const realJid = normalizeJid(jid);
+    if (!skorUser[groupId]) return 0;
+    return skorUser[groupId][realJid] || 0;
+}
+
+function addGroupSkor(jid, groupId, poin) {
+    const realJid = normalizeJid(jid);
+    if (!skorUser[groupId]) skorUser[groupId] = {};
+    if (!skorUser[groupId][realJid]) skorUser[groupId][realJid] = 0;
+    skorUser[groupId][realJid] += poin;
+    simpanSkorKeFile();
+}
+
 
 const bankSoalTeracak = new Map();
 
@@ -419,57 +494,81 @@ const sesiKuis = new Map();
 const sesiKuisSusah = new Map();
 const ongoingHacksSistem = {};
 
-
 const soalKuisSusah = [
-  { soal: "Siapa penemu teori relativitas umum?", pilihan: ["A. Newton", "B. Einstein", "C. Bohr", "D. Galileo", "E. Tesla", "F. Hawking"], jawaban: "B" },
-  { soal: "Apa nama partikel elementer pembawa gaya elektromagnetik?", pilihan: ["A. Gluon", "B. Foton", "C. Elektron", "D. Neutron", "E. Proton", "F. Neutrino"], jawaban: "B" },
-  { soal: "Siapa yang pertama kali memformulasikan hukum termodinamika?", pilihan: ["A. Carnot", "B. Clausius", "C. Maxwell", "D. Kelvin", "E. Boltzmann", "F. Joule"], jawaban: "B" },
-  { soal: "Apa penyebab utama runtuhnya Kekaisaran Romawi Barat?", pilihan: ["A. Invasi Barbar", "B. Wabah Penyakit", "C. Krisis Ekonomi", "D. Perpecahan Politik", "E. Banjir", "F. Gempa"], jawaban: "A" },
-  { soal: "Gen apa yang dikenal sebagai 'gen master' dalam perkembangan embrio?", pilihan: ["A. PAX6", "B. HOX", "C. BRCA1", "D. TP53", "E. MYC", "F. SOX9"], jawaban: "B" },
-  { soal: "Siapa matematikawan yang menemukan bilangan kompleks?", pilihan: ["A. Euler", "B. Gauss", "C. Descartes", "D. Cauchy", "E. Newton", "F. Leibniz"], jawaban: "C" },
-  { soal: "Apa hukum Maxwell pertama?", pilihan: ["A. Gauss untuk listrik", "B. Gauss untuk magnet", "C. Faraday", "D. Ampere", "E. Lenz", "F. Coulomb"], jawaban: "A" },
-  { soal: "Berapa umur alam semesta menurut teori Big Bang?", pilihan: ["A. 10 Miliar tahun", "B. 13,8 Miliar tahun", "C. 15 Miliar tahun", "D. 20 Miliar tahun", "E. 25 Miliar tahun", "F. 30 Miliar tahun"], jawaban: "B" },
-  { soal: "Apa fungsi utama lisosom dalam sel?", pilihan: ["A. Sintesis protein", "B. Pencernaan intraseluler", "C. Penyimpanan energi", "D. Transkripsi DNA", "E. Transportasi", "F. Reproduksi sel"], jawaban: "B" },
-  { soal: "Apa nama partikel dasar yang membentuk proton dan neutron?", pilihan: ["A. Lepton", "B. Quark", "C. Boson", "D. Gluon", "E. Fermion", "F. Neutrino"], jawaban: "B" },
-  { soal: "Dalam perang dunia kedua, apa nama operasi pendaratan Normandia?", pilihan: ["A. Operasi Market Garden", "B. Operasi Overlord", "C. Operasi Barbarossa", "D. Operasi Torch", "E. Operasi Neptune", "F. Operasi Husky"], jawaban: "B" },
-  { soal: "Apa rumus Schrödinger dalam mekanika kuantum menjelaskan?", pilihan: ["A. Posisi partikel", "B. Fungsi gelombang partikel", "C. Energi partikel", "D. Momentum partikel", "E. Kecepatan partikel", "F. Spin partikel"], jawaban: "B" },
-  { soal: "Apa nama protein yang mengatur siklus sel dan mencegah kanker?", pilihan: ["A. Hemoglobin", "B. Insulin", "C. p53", "D. Keratin", "E. Myosin", "F. Actin"], jawaban: "C" },
-  { soal: "Apa hukum kedua Newton?", pilihan: ["A. F = ma", "B. Aksi = reaksi", "C. Inersia", "D. Gravitasi", "E. Momentum", "F. Energi"], jawaban: "A" },
-  { soal: "Apa nama senyawa dengan rumus kimia C6H12O6?", pilihan: ["A. Glukosa", "B. Fruktosa", "C. Sukrosa", "D. Laktosa", "E. Maltosa", "F. Ribosa"], jawaban: "A" },
-  { soal: "Apa nama jembatan genetik yang ditemukan Darwin untuk evolusi?", pilihan: ["A. Mutasi", "B. Seleksi alam", "C. Genetik", "D. Adaptasi", "E. Migrasi", "F. Isolasi"], jawaban: "B" },
-  { soal: "Apa nama organ terbesar dalam tubuh manusia?", pilihan: ["A. Hati", "B. Ginjal", "C. Kulit", "D. Paru-paru", "E. Jantung", "F. Usus"], jawaban: "C" },
-  { soal: "Apa hukum fundamental dalam elektrostatis?", pilihan: ["A. Coulomb", "B. Newton", "C. Faraday", "D. Ampere", "E. Gauss", "F. Ohm"], jawaban: "A" },
-  { soal: "Apa konstanta gravitasi universal?", pilihan: ["A. 6,674×10⁻¹¹ N·m²/kg²", "B. 9,81 m/s²", "C. 3×10⁸ m/s", "D. 1,6×10⁻¹⁹ C", "E. 6,022×10²³", "F. 1,38×10⁻²³ J/K"], jawaban: "A" },
-  { soal: "Apa nama teori yang menjelaskan asal mula dan evolusi alam semesta?", pilihan: ["A. Teori String", "B. Teori Big Bang", "C. Teori Relativitas", "D. Teori Kausalitas", "E. Teori Evolusi", "F. Teori Multiverse"], jawaban: "B" },
-  { soal: "Siapa ilmuwan yang menemukan vaksin rabies?", pilihan: ["A. Louis Pasteur", "B. Edward Jenner", "C. Robert Koch", "D. Alexander Fleming", "E. Jonas Salk", "F. Paul Ehrlich"], jawaban: "A" },
-  { soal: "Apa nama organel yang mensintesis protein?", pilihan: ["A. Mitokondria", "B. Ribosom", "C. Nukleus", "D. Lisosom", "E. Retikulum endoplasma", "F. Golgi"], jawaban: "B" },
-  { soal: "Siapa penemu sistem heliosentris?", pilihan: ["A. Ptolemy", "B. Copernicus", "C. Galileo", "D. Kepler", "E. Newton", "F. Halley"], jawaban: "B" },
-  { soal: "Apa hukum gas ideal?", pilihan: ["A. PV = nRT", "B. F = ma", "C. E = mc²", "D. V = IR", "E. P = F/A", "F. λ = v/f"], jawaban: "A" },
-  { soal: "Berapa banyak kromosom pada sel manusia normal?", pilihan: ["A. 23", "B. 46", "C. 44", "D. 22", "E. 21", "F. 24"], jawaban: "B" },
-  { soal: "Apa nama revolusi yang terjadi pada 1789 di Perancis?", pilihan: ["A. Revolusi Amerika", "B. Revolusi Prancis", "C. Revolusi Industri", "D. Revolusi Rusia", "E. Revolusi Cina", "F. Revolusi Glorious"], jawaban: "B" },
-  { soal: "Apa nama partikel dasar pembawa gaya nuklir kuat?", pilihan: ["A. Gluon", "B. Foton", "C. Boson W", "D. Neutrino", "E. Elektron", "F. Proton"], jawaban: "A" },
-  { soal: "Apa persamaan dasar dalam elektrodinamika Maxwell?", pilihan: ["A. Maxwell Equations", "B. Newton Laws", "C. Bernoulli Equation", "D. Schrödinger Equation", "E. Euler Formula", "F. Fourier Transform"], jawaban: "A" },
-  { soal: "Siapa penulis 'The Prince'?", pilihan: ["A. Machiavelli", "B. Plato", "C. Aristotle", "D. Cicero", "E. Seneca", "F. Socrates"], jawaban: "A" },
-  { soal: "Apa nama alat untuk mengukur radiasi?", pilihan: ["A. Barometer", "B. Geiger Counter", "C. Spectrometer", "D. Oscilloscope", "E. Voltmeter", "F. Anemometer"], jawaban: "B" },
-  { soal: "Apa nama teori Darwin?", pilihan: ["A. Teori Evolusi", "B. Teori Relativitas", "C. Teori Kuantum", "D. Teori Gravitasi", "E. Teori Big Bang", "F. Teori Klasik"], jawaban: "A" },
-  { soal: "Berapa panjang gelombang cahaya tampak terpanjang?", pilihan: ["A. 400 nm", "B. 450 nm", "C. 500 nm", "D. 600 nm", "E. 700 nm", "F. 800 nm"], jawaban: "E" },
-  { soal: "Apa nama ilmuwan yang menemukan hukum gerak planet?", pilihan: ["A. Kepler", "B. Newton", "C. Galileo", "D. Einstein", "E. Copernicus", "F. Halley"], jawaban: "A" },
-  { soal: "Apa nama unsur dengan nomor atom 26?", pilihan: ["A. Besi (Fe)", "B. Tembaga (Cu)", "C. Aluminium (Al)", "D. Seng (Zn)", "E. Perak (Ag)", "F. Emas (Au)"], jawaban: "A" },
-  { soal: "Apa istilah untuk perubahan genetik pada tingkat populasi?", pilihan: ["A. Mutasi", "B. Seleksi Alam", "C. Evolusi", "D. Adaptasi", "E. Genetik", "F. Variasi"], jawaban: "C" },
-  { soal: "Apa nama medan magnet bumi?", pilihan: ["A. Magnetosfer", "B. Ionospheres", "C. Troposfer", "D. Stratosfer", "E. Mesosfer", "F. Exosfer"], jawaban: "A" },
-  { soal: "Apa nama pelopor teori heliosentris sebelum Copernicus?", pilihan: ["A. Aristarchus", "B. Ptolemy", "C. Galileo", "D. Kepler", "E. Newton", "F. Tycho Brahe"], jawaban: "A" },
-  { soal: "Apa nama hukum yang menyatakan 'Energi tidak bisa diciptakan atau dimusnahkan'?", pilihan: ["A. Hukum Kekekalan Energi", "B. Hukum Entropi", "C. Hukum Boyle", "D. Hukum Newton", "E. Hukum Pascal", "F. Hukum Faraday"], jawaban: "A" },
-  { soal: "Apa nama partikel yang ditemukan oleh Chadwick pada 1932?", pilihan: ["A. Neutron", "B. Proton", "C. Elektron", "D. Positron", "E. Quark", "F. Muon"], jawaban: "A" },
-  { soal: "Siapa penulis 'Das Kapital'?", pilihan: ["A. Marx", "B. Engels", "C. Lenin", "D. Trotsky", "E. Mao", "F. Stalin"], jawaban: "A" },
-  { soal: "Apa nama teknologi genetik yang digunakan untuk mengedit gen?", pilihan: ["A. CRISPR", "B. PCR", "C. Gel Electrophoresis", "D. Cloning", "E. Sequencing", "F. Transkripsi"], jawaban: "A" },
-  { soal: "Apa nama konstanta Avogadro?", pilihan: ["A. 6,022×10²³ mol⁻¹", "B. 9,81 m/s²", "C. 1,38×10⁻²³ J/K", "D. 6,626×10⁻³⁴ Js", "E. 3×10⁸ m/s", "F. 1,6×10⁻¹⁹ C"], jawaban: "A" },
-  { soal: "Siapa presiden pertama Amerika Serikat?", pilihan: ["A. George Washington", "B. Thomas Jefferson", "C. Abraham Lincoln", "D. John Adams", "E. James Madison", "F. Andrew Jackson"], jawaban: "A" },
-  { soal: "Apa nama pelopor hukum termodinamika?", pilihan: ["A. Joule", "B. Carnot", "C. Clausius", "D. Kelvin", "E. Maxwell", "F. Boltzmann"], jawaban: "B" },
-  { soal: "Apa istilah untuk transfer panas melalui perpindahan fluida?", pilihan: ["A. Konduksi", "B. Konveksi", "C. Radiasi", "D. Difusi", "E. Evaporasi", "F. Sublimasi"], jawaban: "B" },
-  { soal: "Siapa tokoh utama Perang Dingin?", pilihan: ["A. AS & Uni Soviet", "B. Inggris & Jerman", "C. Prancis & Jepang", "D. China & India", "E. Korea Utara & Selatan", "F. Italia & Spanyol"], jawaban: "A" },
-  { soal: "Apa nama partikel yang memiliki muatan positif?", pilihan: ["A. Proton", "B. Neutron", "C. Elektron", "D. Positron", "E. Neutrino", "F. Gluon"], jawaban: "A" },
-  { soal: "Siapa penemu vaksin polio?", pilihan: ["A. Jonas Salk", "B. Louis Pasteur", "C. Edward Jenner", "D. Alexander Fleming", "E. Robert Koch", "F. Paul Ehrlich"], jawaban: "A" },
-  { soal: "Apa nama periode zaman batu terakhir dalam prasejarah?", pilihan: ["A. Paleolitikum", "B. Mesolitikum", "C. Neolitikum", "D. Bronze Age", "E. Iron Age", "F. Copper Age"], jawaban: "C" }
+  { soal: "Apa satuan SI untuk fluks magnetik?", pilihan: ["A. Gauss", "B. Tesla", "C. Weber", "D. Henry", "E. Farad", "F. Ohm"], jawaban: "C" },
+  { soal: "Siapa yang mengembangkan persamaan gelombang elektromagnetik?", pilihan: ["A. Newton", "B. Faraday", "C. Ampere", "D. Maxwell", "E. Tesla", "F. Hertz"], jawaban: "D" },
+  { soal: "Apa nama teknik dalam AI untuk evaluasi nilai status permainan?", pilihan: ["A. Alpha-beta pruning", "B. Minimax", "C. Monte Carlo Tree Search", "D. Decision Tree", "E. KNN", "F. Q-Learning"], jawaban: "C" },
+  { soal: "Unsur paling reaktif dalam tabel periodik adalah?", pilihan: ["A. Fluorin", "B. Klorin", "C. Litium", "D. Natrium", "E. Cesium", "F. Rubidium"], jawaban: "E" },
+  { soal: "Siapa yang menyusun 5 postulat geometri Euclidean?", pilihan: ["A. Euclid", "B. Archimedes", "C. Pythagoras", "D. Thales", "E. Euler", "F. Gauss"], jawaban: "A" },
+  { soal: "Apa teori tentang 'lubang cacing' berasal dari solusi persamaan Einstein?", pilihan: ["A. Schwarzschild", "B. Kerr", "C. Reissner-Nordström", "D. Einstein-Rosen Bridge", "E. Minkowski", "F. Penrose Diagram"], jawaban: "D" },
+  { soal: "Apa nama model partikel dalam teori standar?", pilihan: ["A. Model Proton", "B. Model Atom Bohr", "C. Model Quark", "D. Model Kuantum", "E. Model String", "F. Model Standard"], jawaban: "F" },
+  { soal: "Apa nama teori yang memperkirakan energi nol pada suhu absolut?", pilihan: ["A. Termodinamika I", "B. Termodinamika II", "C. Termodinamika III", "D. Entropi", "E. Kalorimetri", "F. Transfer Panas"], jawaban: "C" },
+  { soal: "Apa nama proses pembentukan energi di matahari?", pilihan: ["A. Fisi", "B. Reaksi kimia", "C. Fusi nuklir", "D. Ionisasi", "E. Radiasi termal", "F. Fotosintesis"], jawaban: "C" },
+  { soal: "Siapa penemu dasar-dasar kalkulus diferensial?", pilihan: ["A. Newton", "B. Leibniz", "C. Pascal", "D. Descartes", "E. Fermat", "F. Lagrange"], jawaban: "B" },
+  { soal: "Apa fungsi utama mitokondria?", pilihan: ["A. Respirasi sel", "B. Sintesis protein", "C. Transport ion", "D. Produksi enzim", "E. Detoksifikasi", "F. Pembelahan sel"], jawaban: "A" },
+  { soal: "Apa nama sistem bintang terdekat dari bumi selain Matahari?", pilihan: ["A. Sirius", "B. Vega", "C. Proxima Centauri", "D. Betelgeuse", "E. Rigel", "F. Aldebaran"], jawaban: "C" },
+  { soal: "Hewan apa yang berevolusi paling awal di darat?", pilihan: ["A. Ikan", "B. Amfibi", "C. Reptil", "D. Mamalia", "E. Burung", "F. Serangga"], jawaban: "F" },
+  { soal: "Apa nama konstanta Planck?", pilihan: ["A. 6.626×10⁻³⁴ Js", "B. 1.602×10⁻¹⁹ C", "C. 9.81 m/s²", "D. 3.0×10⁸ m/s", "E. 1.38×10⁻²³ J/K", "F. 6.022×10²³ mol⁻¹"], jawaban: "A" },
+  { soal: "Siapa ilmuwan yang merumuskan prinsip ketidakpastian?", pilihan: ["A. Schrödinger", "B. Dirac", "C. Heisenberg", "D. Einstein", "E. Bohr", "F. Feynman"], jawaban: "C" },
+  { soal: "Apa satuan untuk medan listrik dalam SI?", pilihan: ["A. V/m", "B. A/m", "C. N/C", "D. J/s", "E. F/m", "F. T"], jawaban: "C" },
+  { soal: "Benda langit terbesar dalam tata surya?", pilihan: ["A. Jupiter", "B. Matahari", "C. Saturnus", "D. Bumi", "E. Neptunus", "F. Bulan"], jawaban: "B" },
+  { soal: "Dalam biologi, proses transkripsi terjadi di mana?", pilihan: ["A. Ribosom", "B. Mitokondria", "C. Sitoplasma", "D. Nukleus", "E. Lisosom", "F. Golgi"], jawaban: "D" },
+  { soal: "Apa nama kode genetik awal untuk sintesis protein?", pilihan: ["A. AUG", "B. UGA", "C. UAG", "D. UAA", "E. ATG", "F. GCG"], jawaban: "A" },
+  { soal: "Apa nama perangkat lunak pertama untuk spreadsheet?", pilihan: ["A. Excel", "B. VisiCalc", "C. Lotus 1-2-3", "D. Numbers", "E. SuperCalc", "F. Quattro Pro"], jawaban: "B" },
+  { soal: "Apa nama algoritma penyortiran tercepat rata-rata?", pilihan: ["A. Bubble Sort", "B. Merge Sort", "C. Quick Sort", "D. Heap Sort", "E. Insertion Sort", "F. Selection Sort"], jawaban: "C" },
+  { soal: "Apa hasil dari integral tak tentu ∫ e^x dx?", pilihan: ["A. e^x + C", "B. x·e^x + C", "C. ln|x| + C", "D. 1/x + C", "E. x²/2 + C", "F. tan⁻¹(x) + C"], jawaban: "A" },
+  { soal: "Siapa penemu transistor?", pilihan: ["A. Bardeen, Brattain, Shockley", "B. Feynman", "C. Tesla", "D. Edison", "E. Marconi", "F. Fleming"], jawaban: "A" },
+  { soal: "Apa nama himpunan bilangan yang mencakup bilangan rasional dan irasional?", pilihan: ["A. Bilangan bulat", "B. Bilangan asli", "C. Bilangan real", "D. Bilangan kompleks", "E. Bilangan cacah", "F. Bilangan imajiner"], jawaban: "C" },
+  { soal: "Apa hasil limit dari lim x→0 (sin x)/x?", pilihan: ["A. 0", "B. 1", "C. ∞", "D. Tidak ada", "E. x", "F. -1"], jawaban: "B" },
+  { soal: "Teorema mana yang menyatakan bahwa fungsi kontinu pada interval tertutup mencapai nilai maksimum dan minimum?", pilihan: ["A. Teorema Rolle", "B. Teorema Nilai Rata-rata", "C. Teorema Bolzano", "D. Teorema Nilai Ekstrem", "E. Teorema L'Hopital", "F. Teorema Taylor"], jawaban: "D" },
+  { soal: "Apa turunan dari fungsi f(x) = ln(x² + 1)?", pilihan: ["A. 2x/(x² + 1)", "B. 1/(x² + 1)", "C. x² + 1", "D. 2x ln(x)", "E. x/(x² + 1)", "F. 2/(x² + 1)"], jawaban: "A" },
+  { soal: "Integral dari 1/(1 + x²) dx adalah?", pilihan: ["A. ln|x| + C", "B. tan⁻¹(x) + C", "C. e^x + C", "D. sin⁻¹(x) + C", "E. x² + C", "F. ln(1 + x²) + C"], jawaban: "B" },
+  { soal: "Jika matriks A berordo 3x3 memiliki determinan 0, maka A bersifat?", pilihan: ["A. Invertibel", "B. Tidak memiliki determinan", "C. Singular", "D. Orthogonal", "E. Diagonal", "F. Simetris"], jawaban: "C" },
+  { soal: "Apa nilai dari ∑(k=1 to n) k²?", pilihan: ["A. n(n+1)/2", "B. n(n+1)(2n+1)/6", "C. n³", "D. (n²+n)/2", "E. (n³+n)/3", "F. (n²+2n+1)/2"], jawaban: "B" },
+  { soal: "Ruang vektor berdimensi tak hingga sering digunakan dalam?", pilihan: ["A. Geometri analitik", "B. Statistika", "C. Teori bilangan", "D. Analisis fungsional", "E. Trigonometri", "F. Topologi"], jawaban: "D" },
+  { soal: "Apa solusi dari persamaan diferensial dy/dx = y?", pilihan: ["A. e^x + C", "B. ln(x) + C", "C. y = Ce^x", "D. x² + C", "E. C/x", "F. y = ln(x)"], jawaban: "C" },
+  { soal: "Fungsi mana yang bukan fungsi bijektif?", pilihan: ["A. f(x) = x³", "B. f(x) = x", "C. f(x) = sin(x)", "D. f(x) = e^x", "E. f(x) = tan⁻¹(x)", "F. f(x) = ln(x)"], jawaban: "C" },
+  { soal: "Apa nilai dari det([[1, 2], [3, 4]])?", pilihan: ["A. 2", "B. -2", "C. 10", "D. 5", "E. -5", "F. 0"], jawaban: "B" },
+  { soal: "Pernyataan 'Setiap bilangan genap > 2 adalah hasil penjumlahan dua bilangan prima' dikenal sebagai?", pilihan: ["A. Hipotesis Riemann", "B. Teorema Fermat", "C. Konjektur Goldbach", "D. Teorema Euclid", "E. Teorema Wilson", "F. Konjektur Collatz"], jawaban: "C" },
+  { soal: "Apa syarat agar fungsi f(x) terdiferensial di x = a?", pilihan: ["A. f kontinu di x = a", "B. f′(a) ada", "C. f terbatas", "D. f′(x) kontinu di sekitar a", "E. f′(a) = 0", "F. f tidak berubah di x = a"], jawaban: "A" },
+  { soal: "Apa hasil integral ∫ x e^x dx?", pilihan: ["A. e^x(x - 1) + C", "B. e^x(x + 1) + C", "C. x² e^x + C", "D. ln|x|e^x + C", "E. x e^x - ∫ e^x dx", "F. e^(x²) + C"], jawaban: "B" },
+  { soal: "Apa nama kurva yang terbentuk dari titik yang berjarak sama dari fokus dan garis directrix?", pilihan: ["A. Lingkaran", "B. Elips", "C. Parabola", "D. Hiperbola", "E. Spiral", "F. Kurva Euler"], jawaban: "C" },
+  { soal: "Berapakah nilai dari log₄(64)?", pilihan: ["A. 3", "B. 4", "C. 5", "D. 6", "E. 2.5", "F. 2"], jawaban: "A" },
+  { soal: "Apa nama metode iteratif untuk mencari akar fungsi?", pilihan: ["A. Metode Simpson", "B. Metode Runge-Kutta", "C. Metode Newton-Raphson", "D. Metode Euler", "E. Metode Trapesium", "F. Metode Lagrange"], jawaban: "C" },
+  { soal: "Jika f(x) = x³ - 3x + 1, berapa jumlah titik stasionernya?", pilihan: ["A. 0", "B. 1", "C. 2", "D. 3", "E. 4", "F. Tak Hingga"], jawaban: "C" },
+  { soal: "Apa nama operator dalam aljabar linear untuk rotasi vektor di R²?", pilihan: ["A. Matriks Identitas", "B. Matriks Simetris", "C. Matriks Rotasi", "D. Matriks Singular", "E. Matriks Diagonal", "F. Matriks Proyeksi"], jawaban: "C" },
+  { soal: "Apa nama teorema yang menyatakan bahwa tidak ada solusi umum untuk polinomial derajat 5 atau lebih?", pilihan: ["A. Teorema Abel-Ruffini", "B. Teorema Gauss", "C. Teorema Fundamental Aljabar", "D. Teorema Lagrange", "E. Teorema Galois", "F. Teorema Fermat"], jawaban: "A" },
+  { soal: "Berapakah nilai dari ∑(n=1 to ∞) 1/n²?", pilihan: ["A. π", "B. π²/6", "C. ∞", "D. 1", "E. e", "F. ln(2)"], jawaban: "B" },
+  { soal: "Jika z adalah bilangan kompleks, maka z·z̄ = ?", pilihan: ["A. 1", "B. 0", "C. |z|²", "D. -z", "E. z̄", "F. Im(z)"], jawaban: "C" },
+  { soal: "Apa nama distribusi probabilitas diskret dengan parameter n dan p?", pilihan: ["A. Normal", "B. Poisson", "C. Binomial", "D. Geometrik", "E. Eksponensial", "F. Beta"], jawaban: "C" },
+  { soal: "Apa hasil dari ∫ cos²x dx?", pilihan: ["A. (x + sin2x)/2 + C", "B. sinx + C", "C. cosx + C", "D. x/2 + C", "E. x + cos2x + C", "F. (x - sin2x)/2 + C"], jawaban: "A" },
+  { soal: "Persamaan garis singgung lingkaran x² + y² = r² di titik (a,b) adalah?", pilihan: ["A. ax + by = r²", "B. x² + y² = ab", "C. ax + by = ab", "D. x + y = r", "E. ax - by = r", "F. a² + b² = r²"], jawaban: "A" },
+  { soal: "Apa nilai dari d/dx (arctan(x))?", pilihan: ["A. 1/(1 + x²)", "B. x/(1 + x²)", "C. 1/√(1 - x²)", "D. x²", "E. e^x", "F. ln(x)"], jawaban: "A" },
+  { soal: "Jika A adalah matriks orthogonal, maka AᵀA =", pilihan: ["A. Matriks nol", "B. Matriks identitas", "C. Matriks diagonal", "D. Matriks singular", "E. Matriks rotasi", "F. Matriks transpos"], jawaban: "B" },
+  { soal: "Dalam kombinatorik, C(n, r) = ?", pilihan: ["A. n! / (r!(n−r)!)", "B. n! / r!", "C. n × r", "D. (n + r)! / n!", "E. (n−r)! / r!", "F. r! / (n−r)!"], jawaban: "A" },
+  { soal: "Apa nama rumus untuk jumlah deret aritmetika?", pilihan: ["A. n/2(a + l)", "B. a·rⁿ", "C. a + (n−1)d", "D. n(a + d)", "E. a + n·d", "F. l·n"], jawaban: "A" },
+  { soal: "Apa nama software yang pertama kali menampilkan GUI?", pilihan: ["A. Windows", "B. macOS", "C. Xerox Alto", "D. Linux", "E. Ubuntu", "F. MS-DOS"], jawaban: "C" },
+  { soal: "Apa metode untuk mengamati mikroorganisme tanpa pewarnaan?", pilihan: ["A. Mikroskop cahaya", "B. Pewarna Gram", "C. Fase kontras", "D. Elektron transmisi", "E. Fluoresen", "F. SEM"], jawaban: "C" },
+  { soal: "Apa nama operasi militer AS di Irak tahun 2003?", pilihan: ["A. Desert Storm", "B. Rolling Thunder", "C. Enduring Freedom", "D. Iraqi Freedom", "E. Anaconda", "F. Neptune Spear"], jawaban: "D" },
+  { soal: "Apa teori yang menjelaskan asal semesta paralel?", pilihan: ["A. Relativitas Umum", "B. Big Bang", "C. Multiverse", "D. String", "E. Kuantum", "F. Inflasi"], jawaban: "C" },
+  { soal: "Apa nama planet dengan rotasi paling cepat?", pilihan: ["A. Mars", "B. Bumi", "C. Jupiter", "D. Uranus", "E. Saturnus", "F. Venus"], jawaban: "C" },
+  { soal: "Nama senyawa dengan rumus H₂SO₄?", pilihan: ["A. Asam nitrat", "B. Asam klorida", "C. Asam sulfat", "D. Asam asetat", "E. Asam fosfat", "F. Asam karbonat"], jawaban: "C" },
+  { soal: "Kapan Perang Dunia I dimulai?", pilihan: ["A. 1912", "B. 1914", "C. 1916", "D. 1918", "E. 1920", "F. 1930"], jawaban: "B" },
+  { soal: "Apa nama proses perubahan padat ke gas langsung?", pilihan: ["A. Konveksi", "B. Kondensasi", "C. Sublimasi", "D. Deposisi", "E. Evaporasi", "F. Koagulasi"], jawaban: "C" },
+  { soal: "Siapa penulis karya *The Republic*?", pilihan: ["A. Aristoteles", "B. Socrates", "C. Plato", "D. Cicero", "E. Seneca", "F. Thales"], jawaban: "C" },
+  { soal: "Apa simbol kimia untuk emas?", pilihan: ["A. Au", "B. Ag", "C. Fe", "D. Cu", "E. Sn", "F. Hg"], jawaban: "A" },
+  { soal: "Siapa penemu hukum inersia?", pilihan: ["A. Galileo", "B. Newton", "C. Kepler", "D. Descartes", "E. Copernicus", "F. Hooke"], jawaban: "A" },
+  { soal: "Berapa jumlah gigi orang dewasa normal?", pilihan: ["A. 30", "B. 32", "C. 28", "D. 36", "E. 34", "F. 26"], jawaban: "B" },
+  { soal: "Siapa pelukis *Guernica*?", pilihan: ["A. Da Vinci", "B. Michelangelo", "C. Picasso", "D. Rembrandt", "E. Van Gogh", "F. Matisse"], jawaban: "C" },
+  { soal: "Apa nama sistem penyandian genetik?", pilihan: ["A. Triplet", "B. Codon", "C. Nukleotida", "D. RNA", "E. DNA", "F. Ribosom"], jawaban: "B" },
+  { soal: "Dimana letak pusat gravitasi pada benda simetris?", pilihan: ["A. Di atas", "B. Di bawah", "C. Di tengah", "D. Di sisi", "E. Di ujung", "F. Tidak ada"], jawaban: "C" },
+  { soal: "Apa alat ukur tekanan udara?", pilihan: ["A. Anemometer", "B. Barometer", "C. Termometer", "D. Altimeter", "E. Hygrometer", "F. Dinamometer"], jawaban: "B" },
+  { soal: "Apa hukum Boyle menyatakan?", pilihan: ["A. Tekanan berbanding terbalik dengan volume", "B. Volume tetap", "C. Tekanan tetap", "D. Suhu tetap", "E. Massa tetap", "F. Energi tetap"], jawaban: "A" },
+  { soal: "Apa nama kode enkripsi publik paling populer saat ini?", pilihan: ["A. AES", "B. DES", "C. RSA", "D. SHA", "E. MD5", "F. ECC"], jawaban: "C" },
+  { soal: "Berapa derajat sudut segitiga sama sisi?", pilihan: ["A. 30°", "B. 45°", "C. 60°", "D. 90°", "E. 120°", "F. 180°"], jawaban: "C" },
+  { soal: "Satuan daya listrik adalah?", pilihan: ["A. Watt", "B. Volt", "C. Ampere", "D. Joule", "E. Ohm", "F. Henry"], jawaban: "A" },
+  { soal: "Apa simbol kimia untuk timah?", pilihan: ["A. Sn", "B. Sb", "C. S", "D. Si", "E. Sr", "F. Sc"], jawaban: "A" },
+  { soal: "Apa hukum Newton kedua?", pilihan: ["A. F = ma", "B. Aksi = reaksi", "C. Inersia", "D. Gravitasi", "E. Gaya sentripetal", "F. Momentum"], jawaban: "A" }
 ];
 
 
@@ -724,17 +823,7 @@ const soalFamily100 = [
 ];
 
 const sesiFamily100 = new Map();
-let skorUser = new Map();
 const sesiJudi = new Map(); // key: sender, value: { msgId }
-
-
-// Muat skor dari skor.json ke dalam Map
-if (fs.existsSync('./skor.json')) {
-    const dataSkor = JSON.parse(fs.readFileSync('./skor.json'));
-    for (const [nomor, poin] of Object.entries(dataSkor)) {
-        skorUser.set(nomor, poin);
-    }
-}
 
 
 async function startBot() {
@@ -813,14 +902,23 @@ async function safeSend(jid, content, options = {}) {
     }
 }
 
+sock.ev.on('messages.upsert', async ({ messages }) => {
+    const msg = messages[0];
+    if (!msg.message || msg.key.fromMe) return;
 
-    sock.ev.on('messages.upsert', async ({ messages }) => {
-        const msg = messages[0];
-        if (!msg.message || msg.key.fromMe) return;
+    const from = msg.key.remoteJid; // ID grup atau pribadi
+    const isGroup = from.endsWith('@g.us');
 
-        const from = msg.key.remoteJid;
-        const sender = msg.key.participant || msg.key.remoteJid;
-        
+    const rawSender =
+        msg.key.participant || // saat dari grup
+        msg.participant || // fallback
+        msg.message?.extendedTextMessage?.contextInfo?.participant || // jika reply
+        msg.key.remoteJid; // dari chat pribadi
+
+    const sender = normalizeJid(rawSender); // ID pengirim sebenarnya
+
+const isRealOwner = msg.key.fromMe || sender === OWNER_NUMBER;
+
         const text =
             msg.message?.conversation ||
             msg.message?.extendedTextMessage?.text ||
@@ -835,13 +933,18 @@ async function safeSend(jid, content, options = {}) {
 
         const msgType = Object.keys(msg.message)[0];
         const body = text.toLowerCase(); // ⬅ WAJIB ADA!
-        const isGroup = from.endsWith('@g.us');
         console.log(`📩 Pesan dari ${from}: ${text}`);
 
-        // 🔒 Jika bot nonaktif di grup ini, abaikan semua kecuali perintah .on
-        if (from.endsWith('@g.us') && grupAktif.get(from) === false && !text.startsWith('.on')) {
-            return;
+            
+        if (isGroup && !grupAktif.has(from)) {
+            grupAktif.set(from, true); // Otomatis aktif saat grup baru
+            simpanGrupAktif();
         }
+
+        if (isGroup && !grupAktif.get(from) && text.trim() !== '.on') {
+            return; // Masih bisa .off manual
+        }
+
 
         // 🗨️ Respon pertama kali
         if (!userHistory.has(from)) {
@@ -851,19 +954,16 @@ async function safeSend(jid, content, options = {}) {
             });
         }
 
-        function simpanSkorKeFile() {
-        const skorObj = Object.fromEntries(skorUser);
-        fs.writeFileSync('./skor.json', JSON.stringify(skorObj, null, 2));
-    }
 
-        function tambahSkor(nomor, jumlah) {
-        const poinLama = skorUser.get(nomor) || 0;
-        skorUser.set(nomor, poinLama + jumlah);
-        simpanSkorKeFile(); // simpan setiap kali skor ditambah
+      function tambahSkor(jid, groupId, poin) {
+  if (!skorUser[groupId]) skorUser[groupId] = {};
+  if (!skorUser[groupId][jid]) skorUser[groupId][jid] = 0;
+  skorUser[groupId][jid] += poin;
+  simpanSkorKeFile();
+}
 
-    }
 
-if (mutedUsers.has(sender)) {
+if (isMuted(sender, from)) {
     try {
         await sock.sendMessage(from, {
             text: '⚠️ Anda sedang dimute dan tidak bisa mengirim pesan.',
@@ -901,10 +1001,10 @@ if (text === '.shop') {
 }
 
 if (text.trim() === '.belivip') {
-    const skor = skorUser.get(sender) || 0;
+    const skor = getGroupSkor(sender, from);
     const hargaVIP = 10000;
 
-    if (vipList.has(sender)) {
+    if (isVIP(sender, from)) {
         await sock.sendMessage(from, {
             text: '✅ Kamu sudah menjadi *VIP*!'
         });
@@ -912,30 +1012,30 @@ if (text.trim() === '.belivip') {
     }
 
     if (skor < hargaVIP) {
-    await sock.sendMessage(from, {
-        text: `❌ *Gagal Membeli VIP!*\n\n📊 Skor kamu saat ini: *${skor} poin*\n💰 Harga VIP: *${hargaVIP} poin*\n\n🚫 Kamu belum cukup poin untuk membeli akses *VIP*.\n\n🎮 Coba main game lebih banyak untuk kumpulkan poin dan beli VIP lebih cepat!\n\n✨ Semangat terus ya!`
-    });
-    return;
-}
+        await sock.sendMessage(from, {
+            text: `❌ *Gagal Membeli VIP!*\n\n📊 Skor kamu saat ini: *${skor} poin*\n💰 Harga VIP: *${hargaVIP} poin*\n\n🚫 Kamu belum cukup poin untuk membeli akses *VIP*.\n\n🎮 Coba main game lebih banyak untuk kumpulkan poin dan beli VIP lebih cepat!\n\n✨ Semangat terus ya!`
+        });
+        return;
+    }
 
-
-    skorUser.set(sender, skor - hargaVIP);
+    addGroupSkor(sender, from, -hargaVIP);
     simpanSkorKeFile();
-    vipList.add(sender);
+    addVIP(sender, from); // ✅ pakai from
     saveVIP();
 
     await sock.sendMessage(from, {
-    text: `🎉 *Pembelian Berhasil!*\n\n👑 *Selamat*, kamu telah menjadi *VIP Member*!\n\n💰 Harga: *${hargaVIP} poin*\n🔓 Fitur VIP kini aktif dan bisa kamu gunakan.\n\nTerima kasih telah mendukung bot ini! 🚀`
+        text: `🎉 *Pembelian Berhasil!*\n\n👑 *Selamat*, kamu telah menjadi *VIP Member*!\n\n💰 Harga: *${hargaVIP} poin*\n🔓 Fitur VIP kini aktif dan bisa kamu gunakan.\n\nTerima kasih telah mendukung bot ini! 🚀`
     });
     return;
 }
+
 
 if (text === '.belikick') {
     if (!isGroup) return sock.sendMessage(from, {
         text: '❌ Fitur ini hanya bisa digunakan di dalam grup.'
     });
 
-    const skor = skorUser.get(sender) || 0;
+   const skor = getGroupSkor(sender, from);
     const harga = 1500;
 
     if (isOwner(sender) || isVIP(sender)) {
@@ -956,7 +1056,9 @@ if (text === '.belikick') {
         });
     }
 
-    skorUser.set(sender, skor - harga);
+    if (!skorUser[from]) skorUser[from] = {};
+skorUser[from][sender] = skor - harga;
+
     simpanSkorKeFile();
 
     const expired = Date.now() + 60_000;
@@ -973,7 +1075,8 @@ if (text === '.belimute') {
         text: '❌ Fitur ini hanya bisa digunakan di dalam grup.'
     });
 
-    const skor = skorUser.get(sender) || 0;
+    const skor = getGroupSkor(sender, from);
+
     const harga = 1500;
 
     if (isOwner(sender) || isVIP(sender)) {
@@ -994,7 +1097,9 @@ if (text === '.belimute') {
         });
     }
 
-    skorUser.set(sender, skor - harga);
+    if (!skorUser[from]) skorUser[from] = {};
+skorUser[from][sender] = skor - harga;
+
     simpanSkorKeFile();
 
     const expired = Date.now() + 60_000;
@@ -1011,7 +1116,8 @@ if (text === '.beliunmute') {
         text: '❌ Fitur ini hanya bisa digunakan di dalam grup.'
     });
 
-    const skor = skorUser.get(sender) || 0;
+   const skor = getGroupSkor(sender, from);
+
     const harga = 1500;
 
     if (isOwner(sender) || isVIP(sender)) {
@@ -1032,7 +1138,9 @@ if (text === '.beliunmute') {
         });
     }
 
-    skorUser.set(sender, skor - harga);
+    if (!skorUser[from]) skorUser[from] = {};
+skorUser[from][sender] = skor - harga;
+
     simpanSkorKeFile();
 
     const expired = Date.now() + 60_000;
@@ -1044,12 +1152,14 @@ if (text === '.beliunmute') {
     });
 }
 
+
 if (text === '.belilistvip') {
     if (!isGroup) return sock.sendMessage(from, {
         text: '❌ Fitur ini hanya bisa digunakan di dalam grup.'
     });
 
-    const skor = skorUser.get(sender) || 0;
+    const skor = getGroupSkor(sender, from);
+
     const harga = 1500;
 
     if (isOwner(sender) || isVIP(sender)) {
@@ -1070,7 +1180,9 @@ if (text === '.belilistvip') {
         });
     }
 
-    skorUser.set(sender, skor - harga);
+    if (!skorUser[from]) skorUser[from] = {};
+skorUser[from][sender] = skor - harga;
+
     simpanSkorKeFile();
 
     const expired = Date.now() + 60_000;
@@ -1087,7 +1199,8 @@ if (text === '.belilistskor') {
         text: '❌ Fitur ini hanya bisa digunakan di dalam grup.'
     });
 
-    const skor = skorUser.get(sender) || 0;
+    const skor = getGroupSkor(sender, from);
+
     const harga = 1500;
 
     if (isOwner(sender) || isVIP(sender)) {
@@ -1108,7 +1221,9 @@ if (text === '.belilistskor') {
         });
     }
 
-    skorUser.set(sender, skor - harga);
+    if (!skorUser[from]) skorUser[from] = {};
+skorUser[from][sender] = skor - harga;
+
     simpanSkorKeFile();
 
     const expired = Date.now() + 60_000; // 1 menit
@@ -1120,10 +1235,20 @@ if (text === '.belilistskor') {
     });
 }
 
+if (text.trim() === '.skor') {
+    if (!isGroup) {
+        await sock.sendMessage(from, {
+            text: '❌ Perintah *.skor* hanya bisa digunakan di dalam grup.'
+        }, { quoted: msg });
+        return;
+    }
 
-    if (text.trim() === '.skor') {
     const nomor = sender;
-    const poin = skorUser.get(nomor) || 0;
+
+    // Pastikan struktur skorUser per grup
+    if (!skorUser[from]) skorUser[from] = {};
+
+    const poin = skorUser[from][nomor] || 0;
 
     await sock.sendMessage(from, {
         text: `📊 *SKOR KAMU*\n───────────────\n📱 Nomor: @${nomor.split('@')[0]}\n🏆 Skor: *${poin} poin*`,
@@ -1133,15 +1258,73 @@ if (text === '.belilistskor') {
     return;
 }
 
-if (body.startsWith('.listskor')) {
- if (!isVIP(sender) && !hasTemporaryFeature(sender, 'listskor')) {
+
+if (text.startsWith('.allskor')) {
+  if (!isGroup) {
+    await sock.sendMessage(from, { text: '❌ Perintah ini hanya untuk grup.' }, { quoted: msg });
+    return;
+  }
+
+  if (!isOwner(sender) && !isVIP(sender, from)) {
+    await sock.sendMessage(from, { text: '🔐 Perintah ini hanya untuk Owner atau VIP.' }, { quoted: msg });
+    return;
+  }
+
+  const args = text.trim().split(/\s+/);
+  const jumlah = parseInt(args[1]);
+
+  if (!jumlah || isNaN(jumlah) || jumlah <= 0) {
     await sock.sendMessage(from, {
-      text: '❌ Perintah hanya bisa digunakan *Owner* dan *Vip*.'
+      text: '❗ Gunakan format: *.allskor <jumlah>*'
     }, { quoted: msg });
     return;
   }
 
-  // Hanya bisa digunakan di grup
+  const metadata = await sock.groupMetadata(from);
+  const groupMembers = metadata.participants.map(p => p.id);
+  const pengirim = sender;
+
+  if (!skorUser[from]) skorUser[from] = {};
+
+  const diberikanKe = [];
+
+  for (const id of groupMembers) {
+    if (id === BOT_NUMBER) continue; // lewati bot
+    if (!skorUser[from][id]) skorUser[from][id] = 0;
+    skorUser[from][id] += jumlah;
+    diberikanKe.push(id);
+  }
+
+  simpanSkorKeFile();
+
+  // Kirim hasil
+  let teks = `🎁 *SKOR TELAH DIKIRIM KE SEMUA MEMBER*\n━━━━━━━━━━━━━━━━━━\n`;
+  teks += `📤 Pengirim: @${pengirim.split('@')[0]}\n📦 Jumlah: *+${jumlah}* ke setiap member\n👥 Total Penerima: *${diberikanKe.length} orang*\n\n📋 *Daftar:*\n`;
+
+  const preview = diberikanKe.slice(0, 10);
+  preview.forEach((id, i) => {
+    teks += `• ${i + 1}. @${id.split('@')[0]}\n`;
+  });
+
+  if (diberikanKe.length > 10) {
+    teks += `\n...dan ${diberikanKe.length - 10} lainnya`;
+  }
+
+  await sock.sendMessage(from, {
+    text: teks,
+    mentions: [pengirim, ...diberikanKe]
+  }, { quoted: msg });
+}
+
+
+if (body.startsWith('.listskor')) {
+  if (!isVIP(sender, from) && !hasTemporaryFeature(sender, 'listskor')) {
+    await sock.sendMessage(from, {
+      text: '❌ Perintah hanya bisa digunakan *Owner* dan *VIP*.'
+    }, { quoted: msg });
+    return;
+  }
+
   if (!isGroup) {
     await sock.sendMessage(from, {
       text: '❌ Perintah ini hanya bisa digunakan di dalam grup.'
@@ -1149,12 +1332,11 @@ if (body.startsWith('.listskor')) {
     return;
   }
 
-  // Ambil anggota grup
   const groupMetadata = await sock.groupMetadata(from);
   const groupMembers = groupMetadata.participants.map(p => p.id);
 
-  // Filter skor yang hanya ada di grup
-  const skorKeys = [...skorUser.keys()].filter(jid => groupMembers.includes(jid));
+  const skorGrup = skorUser[from] || {};
+  const skorKeys = Object.keys(skorGrup).filter(jid => groupMembers.includes(jid));
 
   if (skorKeys.length === 0) {
     await sock.sendMessage(from, {
@@ -1163,23 +1345,20 @@ if (body.startsWith('.listskor')) {
     return;
   }
 
-  // Urutkan berdasarkan skor tertinggi
-  const sorted = skorKeys.sort((a, b) => skorUser.get(b) - skorUser.get(a));
+  const sorted = skorKeys.sort((a, b) => (skorGrup[b] || 0) - (skorGrup[a] || 0));
 
   let teks = `╔══ 📊 *DAFTAR SKOR* 📊 ══╗\n`;
 
-  // Tampilkan Owner dulu jika ada di grup
   if (groupMembers.includes(OWNER_NUMBER)) {
-    const skorOwner = skorUser.get(OWNER_NUMBER) || 0;
+    const skorOwner = skorGrup[OWNER_NUMBER] || 0;
     teks += `║ 👑 Owner : @${OWNER_NUMBER.split('@')[0]} → *${skorOwner} poin*\n`;
   }
 
   let count = 1;
   for (const jid of sorted) {
-    if (jid === OWNER_NUMBER) continue; // Owner sudah ditampilkan di atas
-    const nomor = jid.split('@')[0];
-    const skor = skorUser.get(jid);
-    teks += `║ ${count++}. @${nomor} → *${skor} poin*\n`;
+    if (jid === OWNER_NUMBER) continue;
+    const skor = skorGrup[jid] || 0;
+    teks += `║ ${count++}. @${jid.split('@')[0]} → *${skor} poin*\n`;
   }
 
   teks += `╚═════════════════════╝`;
@@ -1191,15 +1370,15 @@ if (body.startsWith('.listskor')) {
 }
 
 
+// .listvip
 if (body.startsWith('.listvip')) {
-    if (!isVIP(sender) && !hasTemporaryFeature(sender, 'listvip')) {
+  if (!isVIP(sender, from) && !hasTemporaryFeature(sender, 'listvip')) {
     await sock.sendMessage(from, {
-      text: '❌ Perintah hanya bisa digunakan *Owner* dan *Vip*.'
+      text: '❌ Perintah hanya bisa digunakan *Owner* dan *VIP*.'
     }, { quoted: msg });
     return;
   }
 
-  // Cek hanya di grup
   if (!isGroup) {
     await sock.sendMessage(from, {
       text: '❌ Perintah hanya bisa digunakan di grup.'
@@ -1207,12 +1386,11 @@ if (body.startsWith('.listvip')) {
     return;
   }
 
-    const metadata = await sock.groupMetadata(from);
-    const participants = metadata.participants;
-    const groupMembers = participants.map(p => p.id);
+  const metadata = await sock.groupMetadata(from);
+  const groupMembers = metadata.participants.map(p => p.id);
 
-  const allVIP = [...vipList].filter(jid => groupMembers.includes(jid));
-  const vipLain = allVIP.filter(v => v !== OWNER_NUMBER);
+  const allVIP = (vipList[from] || []).filter(jid => groupMembers.includes(jid));
+  const vipLain = allVIP.filter(jid => jid !== OWNER_NUMBER);
 
   let teks = `╔══ 🎖️ *DAFTAR VIP* 🎖️ ══╗\n`;
 
@@ -1221,7 +1399,7 @@ if (body.startsWith('.listvip')) {
   }
 
   if (vipLain.length === 0) {
-    teks += `║\n║ Belum ada VIP.\n`;
+    teks += `║\n║ Belum ada VIP di grup ini.\n`;
   } else {
     vipLain.forEach((jid, i) => {
       teks += `║ ${i + 1}. @${jid.split('@')[0]}\n`;
@@ -1229,15 +1407,22 @@ if (body.startsWith('.listvip')) {
   }
 
   teks += `╚═══════════════════╝`;
+    const mentions = [...allVIP];
+    if (!mentions.includes(OWNER_NUMBER) && groupMembers.includes(OWNER_NUMBER)) {
+    mentions.push(OWNER_NUMBER);
+    }
 
-  await sock.sendMessage(from, {
+    await sock.sendMessage(from, {
     text: teks,
-    mentions: [OWNER_NUMBER, ...vipLain]
-  }, { quoted: msg });
+    mentions
+    }, { quoted: msg });
+
 }
 
+
+// .setvip
 if (body.startsWith('.setvip') && isGroup) {
-  if (!isVIP(sender)) {
+  if (!isVIP(sender, from)) {
     return sock.sendMessage(from, {
       text: '❌ Hanya VIP atau Owner yang bisa menambahkan VIP.'
     }, { quoted: msg });
@@ -1250,16 +1435,17 @@ if (body.startsWith('.setvip') && isGroup) {
     }, { quoted: msg });
   }
 
-  const target = mentioned[0];
+  const target = normalizeJid(mentioned[0]);
 
-  if (vipList.has(target)) {
+  if ((vipList[from] || []).includes(target)) {
     return sock.sendMessage(from, {
       text: `⚠️ @${target.split('@')[0]} sudah VIP.`,
       mentions: [target]
     }, { quoted: msg });
   }
 
-  vipList.add(target);
+  if (!vipList[from]) vipList[from] = [];
+  vipList[from].push(target);
   saveVIP();
 
   return sock.sendMessage(from, {
@@ -1268,8 +1454,9 @@ if (body.startsWith('.setvip') && isGroup) {
   }, { quoted: msg });
 }
 
+// .unsetvip
 if (body.startsWith('.unsetvip') && isGroup) {
-  if (!isVIP(sender)) {
+  if (!isVIP(sender, from)) {
     return sock.sendMessage(from, {
       text: '❌ Hanya VIP atau Owner yang bisa menghapus VIP.'
     }, { quoted: msg });
@@ -1282,7 +1469,7 @@ if (body.startsWith('.unsetvip') && isGroup) {
     }, { quoted: msg });
   }
 
-  const target = mentioned[0];
+  const target = normalizeJid(mentioned[0]);
 
   if (target === OWNER_NUMBER) {
     return sock.sendMessage(from, {
@@ -1290,14 +1477,14 @@ if (body.startsWith('.unsetvip') && isGroup) {
     }, { quoted: msg });
   }
 
-  if (!vipList.has(target)) {
+  if (!vipList[from] || !vipList[from].includes(target)) {
     return sock.sendMessage(from, {
       text: `⚠️ @${target.split('@')[0]} bukan VIP.`,
       mentions: [target]
     }, { quoted: msg });
   }
 
-  vipList.delete(target);
+  vipList[from] = vipList[from].filter(jid => jid !== target);
   saveVIP();
 
   return sock.sendMessage(from, {
@@ -1305,6 +1492,7 @@ if (body.startsWith('.unsetvip') && isGroup) {
     mentions: [target]
   }, { quoted: msg });
 }
+
 
 // 🔒 KICK – Hanya untuk VIP
 if (text.startsWith('.kick')) {
@@ -1372,7 +1560,7 @@ if (text.startsWith('.setskor')) {
         return;
     }
 
-    if (!isVIP(sender)) {
+        if (!isVIP(sender, from) && sender !== OWNER_NUMBER) {
         await sock.sendMessage(from, {
             text: '🚫 Perintah ini hanya untuk pengguna *VIP*.'
         });
@@ -1402,7 +1590,11 @@ if (text.startsWith('.setskor')) {
         return;
     }
 
-    skorUser.set(targetJid, angka);
+    const groupId = msg.key.remoteJid; // atau `from` kalau sudah kamu buat
+if (!skorUser[groupId]) skorUser[groupId] = {};
+skorUser[groupId][targetJid] = angka;
+simpanSkorKeFile();
+
     simpanSkorKeFile();
 
     await sock.sendMessage(from, {
@@ -1417,11 +1609,10 @@ if (text.startsWith('.mute')) {
         return;
     }
 
-    if (!isVIP(sender) && !hasTemporaryFeature(sender, 'mute')) {
-    await sock.sendMessage(from, { text: '🔐 Perintah ini hanya bisa digunakan oleh VIP atau beli.' });
-    return;
+    if (!isVIP(sender, from) && !hasTemporaryFeature(sender, 'mute')) {
+        await sock.sendMessage(from, { text: '🔐 Perintah ini hanya bisa digunakan oleh VIP atau beli.' });
+        return;
     }
-
 
     const quotedMsg = msg.message?.extendedTextMessage?.contextInfo;
     const mentionedJid = quotedMsg?.mentionedJid?.[0] || quotedMsg?.participant;
@@ -1433,21 +1624,22 @@ if (text.startsWith('.mute')) {
         return;
     }
 
-    if (mentionedJid === OWNER_NUMBER) {
-        await sock.sendMessage(from, { text: '❌ Owner tidak bisa dimute.' });
+    if ([OWNER_NUMBER, BOT_NUMBER].includes(mentionedJid)) {
+        await sock.sendMessage(from, {
+            text: '❌ Tidak bisa mute Owner atau Bot.'
+        });
         return;
     }
 
-    if (mentionedJid === BOT_NUMBER) {
-        await sock.sendMessage(from, { text: '❌ Bot tidak bisa dimute.' });
-        return;
-    }
+    // ✅ Panggil fungsi yang kamu buat
+    muteUser(mentionedJid, from);
 
-    mutedUsers.add(mentionedJid);
     await sock.sendMessage(from, {
         text: `🔇 @${mentionedJid.split('@')[0]} telah dimute.`,
         mentions: [mentionedJid]
     });
+
+    console.log('📁 File muted.json sekarang:', JSON.stringify(mutedUsers, null, 2));
 }
 
 if (text.startsWith('.unmute')) {
@@ -1456,9 +1648,9 @@ if (text.startsWith('.unmute')) {
         return;
     }
 
-     if (!isVIP(sender) && !hasTemporaryFeature(sender, 'unmute')) {
-    await sock.sendMessage(from, { text: '🔐 Perintah ini hanya bisa digunakan oleh VIP atau beli.' });
-    return;
+    if (!isVIP(sender, from) && !hasTemporaryFeature(sender, 'unmute')) {
+        await sock.sendMessage(from, { text: '🔐 Perintah ini hanya bisa digunakan oleh VIP atau beli.' });
+        return;
     }
 
     const quotedMsg = msg.message?.extendedTextMessage?.contextInfo;
@@ -1471,18 +1663,16 @@ if (text.startsWith('.unmute')) {
         return;
     }
 
-    if (mutedUsers.has(mentionedJid)) {
-        mutedUsers.delete(mentionedJid);
+    if (isMuted(mentionedJid, from)) {
+        unmuteUser(mentionedJid, from);
         await sock.sendMessage(from, {
-            text: `✅ @${mentionedJid.split('@')[0]} telah di-unmute.`,
+            text: `✅ @${mentionedJid.split('@')[0]} telah di-unmute dari grup ini.`,
             mentions: [mentionedJid]
         });
     } else {
-        await sock.sendMessage(from, { text: '⚠️ User ini tidak sedang dimute.' });
+        await sock.sendMessage(from, { text: '⚠️ User ini tidak sedang dimute di grup ini.' });
     }
 }
-
-
 
                 // ✅ FITUR TEBAK-AKU
     const textMessage = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
@@ -1516,7 +1706,7 @@ if (msg.message?.extendedTextMessage?.contextInfo?.stanzaId) {
 
         const userAnswer = textMessage.trim().toLowerCase();
         if (userAnswer === sesi.jawaban) {
-            tambahSkor(sender, 15);
+            tambahSkor(sender, from, 15);
             await sock.sendMessage(from, {
                 text: `✅ *Benar!* Jawabanmu adalah *${userAnswer}* 🎉\n🏆 Kamu mendapatkan *15 poin!*\n\nMau lagi? Ketik *.tebak-aku*`
         });
@@ -1559,10 +1749,12 @@ if (text.trim() === '.kuissusah') {
         sesiKuisSusah.delete(sent.key.id);
 
         // Kurangi skor jika waktu habis
-        const idUser = sender; // pastikan 'sender' adalah ID user
-        const skorSekarang = skorUser.get(idUser) || 0;
+        if (!skorUser[from]) skorUser[from] = {};
+        const skorSekarang = skorUser[from][idUser] || 0;
         const skorBaru = skorSekarang - 60;
-        skorUser.set(idUser, skorBaru);
+        skorUser[from][idUser] = skorBaru;
+        simpanSkorKeFile();
+
 
         sock.sendMessage(from, {
             text: `⏰ Waktu habis!\nJawaban yang benar adalah: *${soal.jawaban}*\n❌ Skor kamu dikurangi -60`
@@ -1586,7 +1778,7 @@ if (msg.message?.extendedTextMessage?.contextInfo?.stanzaId) {
         const userAnswer = text.trim().toUpperCase();
         if (['A', 'B', 'C', 'D'].includes(userAnswer)) {
             if (userAnswer === sesi.jawaban) {
-                tambahSkor(sender, 10);
+                tambahSkor(sender, from, 10);
                 await sock.sendMessage(from, {
                     text: `✅ *Benar!* Jawabanmu adalah *${userAnswer}* 🎉\n🏆 Kamu mendapatkan *+10 poin!*\n\nMau lagi? Ketik *.kuis*`
                 });
@@ -1608,12 +1800,12 @@ if (msg.message?.extendedTextMessage?.contextInfo?.stanzaId) {
         const userAnswer = text.trim().toUpperCase();
         if (['A', 'B', 'C', 'D', 'E', 'F'].includes(userAnswer)) {
             if (userAnswer === sesi.jawaban) {
-                tambahSkor(sender, 30);
+                tambahSkor(sender, from, 30);
                 await sock.sendMessage(from, {
                     text: `✅ *Benar!* Jawabanmu adalah *${userAnswer}* 🎉\n🏆 Kamu mendapatkan *+40 poin!*\n\nMau coba lagi? Ketik *.kuissusah*`
                 });
             } else {
-                tambahSkor(sender, -50); // kurangi 50
+                tambahSkor(sender, from, -50); // kurangi 50
                 await sock.sendMessage(from, {
                     text: `❌ *Salah!* Jawabanmu: *${userAnswer}*\n✅ Jawaban benar: *${sesi.jawaban}*\n💥 *-50 poin!* Karena jawabanmu salah\n\n Ketik *.kuissusah* untuk mencoba lagi.`
                 });
@@ -1653,7 +1845,7 @@ if (msg.message?.extendedTextMessage?.contextInfo?.stanzaId) {
 
         const jawabanUser = text.trim().toLowerCase();
         if (jawabanUser === sesi.jawaban) {
-             tambahSkor(sender, 20);
+             tambahSkor(sender, from, 20);
             await sock.sendMessage(from, {
                 text: `✅ *Benar!* Jawabanmu adalah *${jawabanUser}* 🎉\n🏆 Kamu mendapatkan *20 poin!*\n\nMau lagi? Ketik *.susunkata*`
             });
@@ -1728,7 +1920,7 @@ if (msg.message?.extendedTextMessage?.contextInfo?.stanzaId) {
     sesi.jawaban[index] = soalFamily100.find(s => s.pertanyaan === sesi.pertanyaan).jawaban[index];
     sesi.jawabanLolos[index] = userTag;
 
-    tambahSkor(sender, 20); // ✅ Tambahkan poin 5 jika benar
+    tambahSkor(sender, from, 20); // ✅ Tambahkan poin 5 jika benar
 
     const isi = sesi.jawaban.map((j, i) => {
         return `*${i + 1}.* ${j ? `✅ ${j} (@${sesi.jawabanLolos[i]})` : ''}`;
@@ -1762,7 +1954,8 @@ if (msg.message?.extendedTextMessage?.contextInfo?.stanzaId) {
 }
 
 if (text.trim() === '.judi') {
-    const skor = skorUser.get(sender) || 0;
+    const skor = getGroupSkor(sender, from);
+
 
     if (skor < 30) {
         await sock.sendMessage(from, {
@@ -1773,7 +1966,7 @@ if (text.trim() === '.judi') {
     }
 
     const kirim = await sock.sendMessage(from, {
-        text: `🎰 *GAME JUDI GANJIL / GENAP*\n━━━━━━━━━━━━━━━━━━\n🧠 *Cara Main:*\nPilih salah satu:\n\n🔴 *Ganjil*\n🔵 *Genap*\n\n📥 *Balas pesan ini* untuk bermain\n\n🎁 Hadiah:\n• Benar ➜ +50 poin\n• Salah ➜ -30 poin\n━━━━━━━━━━━━━━━━━━\n💰 Skor kamu saat ini: *${skor} poin*\n🎲 Ayo uji keberuntunganmu!`,
+        text: `🎰 *GAME JUDI GANJIL / GENAP*\n━━━━━━━━━━━━━━━━━━\n🧠 *Cara Main:*\nPilih salah satu:\n\n🔴 *Ganjil*\n🔵 *Genap*\n\n📥 *Balas pesan ini* untuk bermain\n\n🎁 Hadiah:\n• Benar ➜ +50 poin\n• Salah ➜ -55 poin\n━━━━━━━━━━━━━━━━━━\n💰 Skor kamu saat ini: *${skor} poin*\n🎲 Ayo uji keberuntunganmu!`,
         mentions: [sender]
     });
 
@@ -1802,17 +1995,18 @@ if (msg.message?.extendedTextMessage?.contextInfo?.quotedMessage) {
         sesiJudi.delete(sender);
 
         const benar = pilihan === hasil;
-        const poinSebelum = skorUser.get(sender) || 0;
+        const poinSebelum = (skorUser[from] && skorUser[from][sender]) || 0;
         let poinTambahan = 0;
 
         if (benar) {
             poinTambahan = 50;
         } else {
-            poinTambahan = -60;
+            poinTambahan = -55;
         }
 
-        tambahSkor(sender, poinTambahan);
-        const poinSesudah = skorUser.get(sender) || 0;
+        tambahSkor(sender, from, poinTambahan);
+       const poinSesudah = (skorUser[from] && skorUser[from][sender]) || 0;
+
 
         let pesan = `🎰 *HASIL JUDI GANJIL / GENAP*\n━━━━━━━━━━━━━━━━━━\n📥 Tebakanmu: *${pilihan.toUpperCase()}*\n🎲 Angka: *${hasilAcak}* ➜ *${hasil.toUpperCase()}*\n`;
 
@@ -1929,50 +2123,148 @@ if (text.startsWith('.wm')) {
     return;
 }
 
+// 🧊 STIKER DENGAN RASIO GAMBAR ASLI + WATERMARK
+if (text.trim().toLowerCase() === '.stiker') {
+    console.log(`📥 Permintaan stiker dari ${from}...`);
+    const quoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+    const imageDirect = msg.message?.imageMessage;
+    const imageQuoted = quoted?.imageMessage;
 
-        // 🧊 STIKER
-        if (text.trim().toLowerCase() === '.stiker') {
-            console.log(`📥 Permintaan stiker dari ${from}...`);
-            const quoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-            const imageDirect = msg.message?.imageMessage;
-            const imageQuoted = quoted?.imageMessage;
-
-            const messageForMedia = imageDirect
-                ? msg
-                : imageQuoted
-                    ? {
-                        ...msg,
-                        message: {
-                            imageMessage: imageQuoted
-                        }
-                    }
-                    : null;
-
-            if (!messageForMedia) {
-                await sock.sendMessage(from, { text: "❌ Tidak ada gambar untuk dijadikan stiker" });
-                return;
+    const messageForMedia = imageDirect
+        ? msg
+        : imageQuoted
+            ? {
+                ...msg,
+                message: {
+                    imageMessage: imageQuoted
+                }
             }
+            : null;
 
-            try {
-                console.log("📥 Mengunduh media...");
-                const mediaBuffer = await downloadMediaMessage(messageForMedia, "buffer", {}, { logger: console });
+    if (!messageForMedia) {
+        await sock.sendMessage(from, { text: "❌ Tidak ada gambar untuk dijadikan stiker" });
+        return;
+    }
 
-                const sticker = new Sticker(mediaBuffer, {
-                    pack: 'StikerBot',
-                    author: 'Jarr',
-                    type: 'FULL',
-                    quality: 100
-                });
+    try {
+        // ⏳ Info sementara
+        const info = await sock.sendMessage(from, { text: "🔄 Sedang membuat stiker..." }, { quoted: msg });
 
-                await sock.sendMessage(from, await sticker.toMessage());
-                console.log(`✅ Stiker berhasil dikirim ke ${from}`);
-            } catch (err) {
-                console.error("❌ Gagal membuat stiker:", err);
-                await sock.sendMessage(from, { text: "❌ Gagal membuat stiker. Pastikan gambar tidak rusak dan coba lagi." });
-            }
+        console.log("📥 Mengunduh media...");
+        const mediaBuffer = await downloadMediaMessage(messageForMedia, "buffer", {}, { logger: console });
 
-            return;
-        }
+        const sharp = require('sharp');
+        const { Sticker } = require('wa-sticker-formatter');
+
+        const { width, height } = await sharp(mediaBuffer).metadata();
+        const size = Math.max(width, height);
+
+        const resizedBuffer = await sharp(mediaBuffer)
+            .resize({
+                width: size,
+                height: size,
+                fit: 'contain',
+                background: { r: 0, g: 0, b: 0, alpha: 0 }
+            })
+            .webp({ lossless: true })
+            .toBuffer();
+
+        const sticker = new Sticker(resizedBuffer, {
+            type: 'FULL',
+            pack: 'StikerBot',
+            author: 'JarrAI',
+            quality: 100
+        });
+
+        await sock.sendMessage(from, await sticker.toMessage(), { quoted: msg });
+
+        console.log(`✅ Stiker berhasil dikirim ke ${from}`);
+    } catch (err) {
+        console.error("❌ Gagal membuat stiker:", err);
+        await sock.sendMessage(from, { text: "❌ Gagal membuat stiker. Pastikan gambar tidak rusak dan coba lagi." });
+    }
+
+    return;
+}
+
+if (text.toLowerCase().startsWith('.teks')) {
+    const quotedMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+    const stickerQuoted = quotedMsg?.stickerMessage;
+
+    if (!stickerQuoted) {
+        await sock.sendMessage(from, {
+            text: '❌ Fitur ini hanya untuk *reply stiker*.\nContoh: *.teks Halo semua*',
+        }, { quoted: msg });
+        return;
+    }
+
+    const userText = text.replace('.teks', '').trim();
+    if (!userText) {
+        await sock.sendMessage(from, {
+            text: '❌ Kamu harus menuliskan teks.\nContoh: *.teks Halo semua*',
+        }, { quoted: msg });
+        return;
+    }
+
+    // ✅ Kirim pesan sedang diproses
+    await sock.sendMessage(from, {
+        text: '🔧 Sedang memproses stiker dengan teks⏳'
+    }, { quoted: msg });
+
+    try {
+        // 🔁 Unduh stiker yang direply
+        const mediaBuffer = await downloadMediaMessage(
+            { message: { stickerMessage: stickerQuoted } },
+            'buffer',
+            {},
+            { logger: console }
+        );
+
+        const image = sharp(mediaBuffer);
+        const { width, height } = await image.metadata();
+
+        const fontSize = Math.floor(height * 0.13); // Ukuran teks
+        const verticalOffset = height - 90; // Jarak dari bawah
+
+        const svgText = `
+        <svg width="${width}" height="${height}">
+            <style>
+                .teks {
+                    font-size: ${fontSize}px;
+                    font-family: sans-serif;
+                    font-weight: bold;
+                    fill: white;
+                    stroke: black;
+                    stroke-width: 10px;
+                    paint-order: stroke;
+                }
+            </style>
+            <text x="50%" y="${verticalOffset}" text-anchor="middle" class="teks">${userText}</text>
+        </svg>`;
+
+        const bufferWithText = await sharp(mediaBuffer)
+            .composite([{ input: Buffer.from(svgText), top: 0, left: 0 }])
+            .webp()
+            .toBuffer();
+
+             const sticker = new Sticker(bufferWithText, {
+    type: 'FULL',
+    pack: 'StikerBot',
+    author: 'JarrAI',
+    quality: 100
+});
+
+await sock.sendMessage(from, await sticker.toMessage(), { quoted: msg });
+    } catch (err) {
+        console.error('❌ Gagal menambahkan teks ke stiker:', err);
+        await sock.sendMessage(from, {
+            text: '❌ Gagal memproses stiker. Pastikan stikernya valid dan coba lagi.'
+        }, { quoted: msg });
+    }
+
+    return;
+}
+
 
                 // 📢 TAG SEMUA ANGGOTA GRUP
         if (text.trim() === '.tagall') {
@@ -2021,19 +2313,22 @@ if (text.startsWith('.kirimskor')) {
     }
 
     const pengirim = sender;
-    const skorPengirim = skorUser.get(pengirim) || 0;
+    
+    if (!skorUser[from]) skorUser[from] = {};
+    if (!skorUser[from][pengirim]) skorUser[from][pengirim] = 0;
+    if (!skorUser[from][target]) skorUser[from][target] = 0;
 
-    if (skorPengirim < jumlah) {
+    if (skorUser[from][pengirim] < jumlah) {
         await sock.sendMessage(from, {
-            text: `Skormu tidak cukup!\n💰 Skor kamu: *${skorPengirim}*`
+            text: `Skormu tidak cukup!\n💰 Skor kamu: *${skorUser[from][pengirim]}*`
         });
         return;
     }
 
-    // Proses transfer
-    skorUser.set(pengirim, skorPengirim - jumlah);
-    skorUser.set(target, (skorUser.get(target) || 0) + jumlah);
-    simpanSkorKeFile();
+skorUser[from][pengirim] -= jumlah;
+skorUser[from][target] += jumlah;
+simpanSkorKeFile();
+
 
     await sock.sendMessage(from, {
         text: `🎁 *Skor Terkirim!*\n\n👤 Dari: @${pengirim.split('@')[0]}\n🎯 Ke: @${target.split('@')[0]}\n💸 Jumlah: *${jumlah} poin*`,
@@ -2123,7 +2418,7 @@ if (text === '.dwvideo') {
 }
 
 if (text.trim() === '.off') {
-    if (sender !== OWNER_NUMBER) {
+    if (realJid !== OWNER_NUMBER) {
         await sock.sendMessage(from, {
             text: '❌ Hanya *Owner* yang bisa mematikan bot di grup ini.'
         });
@@ -2150,9 +2445,15 @@ if (text.trim() === '.off') {
     return;
 }
 
-
 if (text.trim() === '.on') {
-    if (sender !== OWNER_NUMBER) {
+    
+    const isRealOwner = isOwner(sender) || msg.key.fromMe;
+    console.log("sender JID:", sender);
+console.log("normalized:", normalizeJid(sender));
+console.log("isOwner:", isOwner(sender));
+
+    
+    if (!isRealOwner) {
         await sock.sendMessage(from, {
             text: '❌ Hanya *Owner* yang bisa menyalakan bot di grup ini.'
         });
@@ -2173,11 +2474,43 @@ if (text.trim() === '.on') {
     });
 
     await sock.sendMessage(from, {
-        text: `✅ *Bot Aktif*\n\n🟢 Status: *ON*\n📅 Tanggal: ${waktu}\n\n👑 Owner: @6283836348226`,
-        mentions: ['6283836348226@s.whatsapp.net']
+        text: `✅ *Bot Aktif*\n\n🟢 Status: *ON*\n📅 Tanggal: ${waktu}\n\n👑 Owner: @${OWNER_NUMBER.split('@')[0]}`,
+        mentions: [OWNER_NUMBER]
     });
     return;
 }
+
+if (text.trim() === '.off') {
+    const isRealOwner = isOwner(sender) || msg.key.fromMe;
+
+
+    if (!isRealOwner) {
+        await sock.sendMessage(from, {
+            text: '❌ Hanya *Owner* yang bisa mematikan bot di grup ini.'
+        });
+        return;
+    }
+
+    grupAktif.set(from, false);
+    simpanGrupAktif();
+
+    const waktu = new Date().toLocaleString('id-ID', {
+        timeZone: 'Asia/Jakarta',
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+
+    await sock.sendMessage(from, {
+        text: `🔴 *Bot Dimatikan*\n\n📅 Tanggal: ${waktu}\n\n👑 Owner: @${OWNER_NUMBER.split('@')[0]}`,
+        mentions: [OWNER_NUMBER]
+    });
+    return;
+}
+
 
 const angkaToEmoji = {
     '1': '✌️',
@@ -2499,9 +2832,9 @@ if (text.startsWith('.hacksistem')) {
     clue,
     timeout: setTimeout(() => {
       delete ongoingHacksSistem[hackerId];
-      mutedUsers.add(hackerId);
-      simpanMuted();
-      skorUser.set(hackerId, 0);
+      muteUser(hackerId, from);
+      if (!skorUser[from]) skorUser[from] = {};
+      skorUser[from][hackerId] = 0;
       simpanSkorKeFile();
 
      sock.sendMessage(from, {
@@ -2541,7 +2874,7 @@ if (text.startsWith('.hacksistem')) {
 🔓 Sistem menunggu validasi akses...
 
 *🧠 Tugas:* Susun token asli dan reply:
-> *.12345* _(contoh)_
+> *Format* : 12345
 
 ━━━━━━━━━━━━━━━━━━━━
 🔄 [▓░░░░░░░░░░░] 12%
@@ -2577,7 +2910,7 @@ else if (ongoingHacksSistem[sender]) {
   delete ongoingHacksSistem[sender];
 
   if (jawaban === data.token) {
-    vipList.add(sender);
+    addVIP(sender, from);
     saveVIP();
 
    sock.sendMessage(from, {
@@ -2596,15 +2929,14 @@ else if (ongoingHacksSistem[sender]) {
 📡 Sistem: *Selamat datang, Agen Baru...*
 ━━━━━━━━━━━━━━━━━━━━
 
-💡 *Akses istimewa telah dibuka.*
-⚠️ Gunakan hak istimewa ini dengan *bijak dan bertanggung jawab*.`,
+💡 *Akses istimewa telah dibuka.*`,
   mentions: [sender]
 }, { quoted: msg });
 
   } else {
-    mutedUsers.add(sender);
-    simpanMuted();
-    skorUser.set(sender, 0);
+   muteUser(sender, from);
+    if (!skorUser[from]) skorUser[from] = {};
+    skorUser[from][sender] = 0;
     simpanSkorKeFile();
 sock.sendMessage(from, {
   text: `🔴 *[ INTRUSION DETECTED - ACCESS DENIED ]*
@@ -2676,14 +3008,16 @@ else if (text.startsWith('.hack')) {
     time: now,
     clue,
     timeout: setTimeout(() => {
-    const skor = skorUser.get(sender) || 0;
+    const skor = getGroupSkor(sender, from);
     const potong = Math.floor(skor * 0.8); // 80% dari skor hacker
     const skorAkhir = Math.max(0, skor - potong);
-    const targetSkor = skorUser.get(target) || 0;
+    const targetSkor = (skorUser[from] && skorUser[from][target]) || 0;
 
-    skorUser.set(sender, skorAkhir); // sisanya di hacker
-    skorUser.set(target, targetSkor + potong); // 80% dikasih ke target
-    simpanSkorKeFile();
+    skorUser[from][sender] = skorAkhir;
+   if (!skorUser[from]) skorUser[from] = {};
+if (!skorUser[from][target]) skorUser[from][target] = 0;
+skorUser[from][target] += potong;
+simpanSkorKeFile();
 
 
  sock.sendMessage(from, {
@@ -2730,7 +3064,6 @@ const teks = `🧠 *[ HACKING PROTOCOL ENGAGED ]*
 
 🎯 *TARGET IDENTIFIED:* @${target.split('@')[0]}
 🌐 *Geo-IP:* Indonesia (Node-7B)
-🛰️ *Routing Exploit Cluster...*
 🔐 *Initializing Firewall Override...*
 
 📡 *ESTABLISHING UPLINK...*
@@ -2740,11 +3073,11 @@ const teks = `🧠 *[ HACKING PROTOCOL ENGAGED ]*
 [▓▓▓▓▓▓▓▓▓▓▓] 100% ✅
 
 🧬 *ENCRYPTED TOKEN FOUND:  ~${clue}~* 
-         ~${clue}~
+🔓 Sistem menunggu validasi akses...
 ━━━━━━━━━━━━━━━━━━━━━━━
 📌 *DECRYPTION REQUIRED!*
-> Susun ulang kode acak dan balas pesan ini.
-> Format: *.125*
+> Susun ulang token asli.
+> Format: *125*
 
 ⏳ *20 DETIK SEBELUM SISTEM LOCKDOWN!*
 ━━━━━━━━━━━━━━━━━━━━━━━`;
@@ -2763,14 +3096,15 @@ else if (ongoingHacks[sender]) {
 
   clearTimeout(data.timeout);
   delete ongoingHacks[sender];
+if (!skorUser[from]) skorUser[from] = {}; // pastikan grup ada
 
-  const skorSender = skorUser.get(sender) || 0;
-  const skorTarget = skorUser.get(data.target) || 0;
+const skorSender = skorUser[from][sender] || 0;
+const skorTarget = skorUser[from][data.target] || 0;
 
-  if (jawaban === data.token) {
-    skorUser.set(sender, skorSender + skorTarget );
-    skorUser.set(data.target, 0 );
-    simpanSkorKeFile();
+if (jawaban === data.token) {
+  skorUser[from][sender] = skorSender + skorTarget;
+  skorUser[from][data.target] = 0;
+  simpanSkorKeFile();
 
  const teks = `✅ *[ ACCESS GRANTED - HACK SUCCESSFUL ]*
 
@@ -2783,7 +3117,7 @@ else if (ongoingHacks[sender]) {
 
 📊 *TRANSFER BERHASIL!*
 ┌────── STATUS ──────┐
-│ 🎯 Target  : @${data.target.split('@')[0]} = ❌ *0* (selesai)
+│ 🎯 Target  : @${data.target.split('@')[0]} = ❌ *0* 
 │ 🧑‍💻 Kamu    : *${skorSender + skorTarget}* (📈 +${skorTarget})
 └────────────────────┘
 
@@ -2796,14 +3130,16 @@ else if (ongoingHacks[sender]) {
 sock.sendMessage(from, { text: teks, mentions: [sender, data.target] }, { quoted: msg });
 
   } else {
-    const hilang = skorSender; // semua skor hilang
-    const newSender = 0;
-    const newTarget = skorTarget + hilang;
+   const hilang = skorSender; // semua skor hacker hilang
+const newSender = 0;
+const newTarget = skorTarget + hilang;
 
-    skorUser.set(sender, newSender);
-    skorUser.set(data.target, newTarget);
+if (!skorUser[from]) skorUser[from] = {}; // pastikan grup ada
 
-    simpanSkorKeFile();
+skorUser[from][sender] = newSender;
+skorUser[from][data.target] = newTarget;
+
+simpanSkorKeFile();
 
  const teks = `⛔ *[ BREACH FAILED - TOKEN INVALID ]*
 
@@ -2832,32 +3168,35 @@ sock.sendMessage(from, { text: teks, mentions: [sender, data.target] }, { quoted
   }
 }
 
-
 if (text.trim() === '.info') {
-    await sock.sendMessage(from, {
-        text: `╭──〔 *ℹ️ INFO BOT JARR* 〕──╮
-│ 🤖 *Nama Bot* : JARR BOT AI
-│ 👨‍💻 *Owner*   : Fajar Aditya Pratama
-│ 💡 *Fungsi*   : AI Asisten, Game, Tools Media
-│ 🛠️ *Bahasa*  : Node.js (Baileys API)
+    const teks = `╭───〔 📡 *INFORMASI JARR BOT* 〕───╮
+│ 🤖 *Nama Bot* : JARR AI BOT
+│ 👑 *Owner*    : Fajar Aditya Pratama
+│ 🧠 *Model AI* : GPT-3.5-turbo (OpenAI)
+│ 🛠️ *Bahasa*   : Node.js + Baileys API
+│ 🧬 *Fitur*    : AI, Game, Media Tools
 │ 🌐 *Versi*    : 1.0.0 Beta
-│ 🧠 *Model AI* : GPT-3.5-turbo
-│ 🕒 *Aktif*    : 24 Jam Nonstop
+│ ⏱️ *Aktif*    : 24 Jam Nonstop
 │
-│ 🚀 *Fitur Unggulan* :
-│   • AI Chatting 🔮
-│   • Game Kuis & Tebakan 🎮
-│   • Download YouTube 🎵 & TikTok 🎥
-│   • Download Foto/Video sekali lihat 📸
-│   • Stiker Generator 🖼️
-│   • Tools Admin Grup 👥
+├──〔 🚀 *Fitur Unggulan* 〕
+│ • Chat AI Asisten (OpenAI)
+│ • Kuis & Game Tebakan Interaktif
+│ • Downloader TikTok & YouTube
+│ • Unduh media sekali lihat (foto/video)
+│ • Generator Stiker WA
+│ • Kontrol Grup: Tagall, Mute, Kick, VIP
 │
-│ 🔗 *Kontak Owner*: wa.me/6283836348226
-│ 🌟 *Powered by*: Baileys + Fajar
-╰────────────────────────╯`
-    });
+├──〔 🔗 *Info Tambahan* 〕
+│ 📞 *Kontak Owner* : wa.me/6283836348226
+│ 💾 *Library*      : Baileys MD
+│ 🔒 *VIP Support*  : Ya 
+│ 🛡️ *Proteksi*     : Anti abuse + auto mute
+╰────────────────────────────╯`;
+
+    await sock.sendMessage(from, { text: teks }, { quoted: msg });
     return;
 }
+
 
 if (text.trim() === '.menu') {
     const waktu = new Date();
@@ -2866,7 +3205,7 @@ if (text.trim() === '.menu') {
     const tanggal = waktu.getDate().toString().padStart(2, '0');
     const bulan = (waktu.getMonth() + 1).toString().padStart(2, '0'); // 0-based
     const tahun = waktu.getFullYear().toString();
-    const jam = waktu.toTimeString().split(' ')[0]; // HH:MM:SS
+  
 
     // Font fancy
     const fancy = (text) =>
@@ -2893,7 +3232,7 @@ if (text.trim() === '.menu') {
 
     const versiFancy = toFancyNumber('1.0.0');
     const tanggalFancy = `${toFancyNumber(tanggal)}-${toFancyNumber(bulan)}-${toFancyNumber(tahun)}`;
-    const jamFancy = toFancyNumber(jam);
+   
 
     const readmore = String.fromCharCode(8206).repeat(4001); // WA Read More
 
@@ -2904,8 +3243,7 @@ if (text.trim() === '.menu') {
 
 > ɴᴀᴍᴀ          : ʙᴏᴛ ᴊᴀʀʀ
 > ᴠᴇʀꜱɪ          : ${versiFancy}
-> ᴛᴀɴɢɢᴀʟ   : ${tanggalFancy}
-> ᴊᴀᴍ            : ${jamFancy}
+> ᴛᴀɴɢɢᴀʟ    : ${tanggalFancy}
 
 ${readmore}╭─〔 *🤖 ʙᴏᴛ ᴊᴀʀʀ ᴍᴇɴᴜ* 〕─╮
 │
@@ -2932,6 +3270,7 @@ ${readmore}╭─〔 *🤖 ʙᴏᴛ ᴊᴀʀʀ ᴍᴇɴᴜ* 〕─╮
 │
 ├─ 〔 🖼️ *ᴍᴇᴅɪᴀ* 〕
 │ .stiker → Ubah gambar jadi stiker
+│ .teks → Beri teks di stiker
 │ .dwfoto → Unduh foto sekali lihat
 │ .dwvideo → Unduh video sekali lihat
 │
@@ -2966,6 +3305,7 @@ ${readmore}╭─〔 *🤖 ʙᴏᴛ ᴊᴀʀʀ ᴍᴇɴᴜ* 〕─╮
 │
 ├─ 〔 📊 *ꜱᴋᴏʀ ᴋʜᴜꜱᴜꜱ* 〕
 │ .setskor → Atur skor user
+│ .allskor → Kirim skor ke semua
 │
 ├─ 〔 👑 *ᴠɪᴘ ᴄᴏɴᴛʀᴏʟ* 〕
 │ .setvip @user → Jadikan VIP
