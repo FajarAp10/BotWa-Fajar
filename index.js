@@ -33,15 +33,17 @@ const COOLDOWN_TIME = 10 * 60 * 1000; // 10 menit
   '6291100802986027@s.whatsapp.net': '6283836348226@s.whatsapp.net' // nomor acak ➜ nomor asli
 };
 
-
 function normalizeJid(jid) {
     if (!jid || typeof jid !== 'string') return '';
 
-    if (ALIAS_OWNER[jid]) return ALIAS_OWNER[jid]; // ← map nomor acak ke nomor asli
+    // Alias mapping
+    if (ALIAS_OWNER[jid]) return ALIAS_OWNER[jid];
 
+    // Sudah JID valid, jangan diapa-apain
     if (jid.endsWith('@s.whatsapp.net') || jid.endsWith('@g.us')) return jid;
 
-    const numMatch = jid.match(/\d{7,}/);
+    // Kalau hanya nomor
+    const numMatch = jid.match(/^\d{7,}$/);
     if (!numMatch) return jid;
 
     let number = numMatch[0];
@@ -49,6 +51,8 @@ function normalizeJid(jid) {
 
     return number + '@s.whatsapp.net';
 }
+
+
 
 const vipPath = './vip.json';
 let vipList = {}; // jadi object per grup
@@ -223,19 +227,21 @@ try {
     skorUser = {};
 }
 
-function getGroupSkor(jid, groupId) {
+function getGroupSkor(jid, roomId) {
     const realJid = normalizeJid(jid);
-    if (!skorUser[groupId]) return 0;
-    return skorUser[groupId][realJid] || 0;
+    if (!skorUser[roomId]) return 0;
+    return skorUser[roomId][realJid] || 0;
 }
 
-function addGroupSkor(jid, groupId, poin) {
+
+function addGroupSkor(jid, roomId, poin) {
     const realJid = normalizeJid(jid);
-    if (!skorUser[groupId]) skorUser[groupId] = {};
-    if (!skorUser[groupId][realJid]) skorUser[groupId][realJid] = 0;
-    skorUser[groupId][realJid] += poin;
+    if (!skorUser[roomId]) skorUser[roomId] = {};
+    if (!skorUser[roomId][realJid]) skorUser[roomId][realJid] = 0;
+    skorUser[roomId][realJid] += poin;
     simpanSkorKeFile();
 }
+
 
 
 const bankSoalTeracak = new Map();
@@ -906,18 +912,26 @@ sock.ev.on('messages.upsert', async ({ messages }) => {
     const msg = messages[0];
     if (!msg.message || msg.key.fromMe) return;
 
-    const from = msg.key.remoteJid; // ID grup atau pribadi
+    const from = msg.key.remoteJid; // ID room: grup atau pribadi
     const isGroup = from.endsWith('@g.us');
 
-    const rawSender =
-        msg.key.participant || // saat dari grup
-        msg.participant || // fallback
-        msg.message?.extendedTextMessage?.contextInfo?.participant || // jika reply
-        msg.key.remoteJid; // dari chat pribadi
+    // Cari ID pengirim sebenarnya
+    let rawSender = null;
+
+    if (isGroup) {
+        rawSender = msg.key.participant || msg.participant;
+    } else {
+        rawSender = msg.key.remoteJid; // chat pribadi
+    }
+
+    // Kalau masih null (jarang), ambil dari contextInfo
+    if (!rawSender && msg.message?.extendedTextMessage?.contextInfo?.participant) {
+        rawSender = msg.message.extendedTextMessage.contextInfo.participant;
+    }
 
     const sender = normalizeJid(rawSender); // ID pengirim sebenarnya
+    const isRealOwner = sender === OWNER_NUMBER;
 
-const isRealOwner = msg.key.fromMe || sender === OWNER_NUMBER;
 
         const text =
             msg.message?.conversation ||
@@ -954,13 +968,15 @@ const isRealOwner = msg.key.fromMe || sender === OWNER_NUMBER;
             });
         }
 
-
-      function tambahSkor(jid, groupId, poin) {
+function tambahSkor(jid, groupId, poin) {
+  const realJid = normalizeJid(jid);
+ 
   if (!skorUser[groupId]) skorUser[groupId] = {};
-  if (!skorUser[groupId][jid]) skorUser[groupId][jid] = 0;
-  skorUser[groupId][jid] += poin;
+  if (!skorUser[groupId][realJid]) skorUser[groupId][realJid] = 0;
+  skorUser[groupId][realJid] += poin;
   simpanSkorKeFile();
 }
+
 
 
 if (isMuted(sender, from)) {
@@ -1236,22 +1252,13 @@ skorUser[from][sender] = skor - harga;
 }
 
 if (text.trim() === '.skor') {
-    if (!isGroup) {
-        await sock.sendMessage(from, {
-            text: '❌ Perintah *.skor* hanya bisa digunakan di dalam grup.'
-        }, { quoted: msg });
-        return;
-    }
+    const roomKey = from;
+    const realJid = normalizeJid(sender); // pastikan ini sama literalnya dengan yang disimpan
 
-    const nomor = sender;
-
-    // Pastikan struktur skorUser per grup
-    if (!skorUser[from]) skorUser[from] = {};
-
-    const poin = skorUser[from][nomor] || 0;
+    const poin = skorUser[roomKey]?.[realJid] || 0;
 
     await sock.sendMessage(from, {
-        text: `📊 *SKOR KAMU*\n───────────────\n📱 Nomor: @${nomor.split('@')[0]}\n🏆 Skor: *${poin} poin*`,
+        text: `📊 *SKOR KAMU*\n───────────────\n📱 Nomor: @${realJid.split('@')[0]}\n🏆 Skor: *${poin} poin*`,
         mentions: [sender]
     });
 
