@@ -21,28 +21,40 @@ const ongoingHacks = {};
 const cooldownHack = new Map();
 const COOLDOWN_TIME = 10 * 60 * 1000; // 10 menit
 
+const bratLimit = new Map(); // Map<JID, { count: number, time: number }>
+const MAX_BRAT = 3;
+const BRAT_COOLDOWN = 60 * 60 * 1000; // 1 jam dalam ms
+const bratAksesSementara = new Map(); 
+
+
 
 
 // Gunakan auth tunggal agar file login bisa disimpan di GitHub/Railway
 
   const OWNER_NUMBER = '6283836348226@s.whatsapp.net'
-  const PROXY_NUMBER = '6291100802986027@s.whatsapp.net'; // nomor kamu di grup
+  const PROXY_NUMBER = '6291100802986027@s.whatsapp.net'; 
   const BOT_NUMBER = '62882007141574@s.whatsapp.net';
 
   const ALIAS_OWNER = {
-  '6291100802986027@s.whatsapp.net': '6283836348226@s.whatsapp.net' // nomor acak ➜ nomor asli
+  '6291100802986027@s.whatsapp.net': OWNER_NUMBER,
+  '91100802986027@s.whatsapp.net': OWNER_NUMBER
 };
 
 function normalizeJid(jid) {
     if (!jid || typeof jid !== 'string') return '';
 
-    // Alias mapping
+    // Alias mapping — pindahkan ke paling atas!
     if (ALIAS_OWNER[jid]) return ALIAS_OWNER[jid];
 
-    // Sudah JID valid, jangan diapa-apain
+    // Kalau sudah JID WA valid, return langsung
     if (jid.endsWith('@s.whatsapp.net') || jid.endsWith('@g.us')) return jid;
 
-    // Kalau hanya nomor
+    // Jika JID aneh seperti @lid, cek prefix dan ganti dengan alias manual
+    const noDomain = jid.split('@')[0];
+    const reconstructed = noDomain + '@s.whatsapp.net';
+    if (ALIAS_OWNER[reconstructed]) return ALIAS_OWNER[reconstructed];
+
+    // Kalau hanya angka
     const numMatch = jid.match(/^\d{7,}$/);
     if (!numMatch) return jid;
 
@@ -74,9 +86,10 @@ function isVIP(jid, groupId) {
 
 
 function isOwner(jid) {
-  const real = normalizeJid(jid);
-  return real === OWNER_NUMBER || real === PROXY_NUMBER;
+    const normalized = normalizeJid(jid);
+    return normalized === OWNER_NUMBER || normalized === PROXY_NUMBER;
 }
+
 
 function addVIP(jid, groupId) {
     const realJid = normalizeJid(jid);
@@ -1005,7 +1018,8 @@ if (text === '.shop') {
 │ • .beliunmute ➜ Akses *.unmute*
 │ • .belilistvip ➜ Akses *.listvip*
 │ • .belilistskor ➜ Akses *.listskor*
-│
+│ • .belibrat ➜ Akses *.brat 30 menit*
+│   
 │ 👑 *FITUR VIP PERMANEN*
 │ 💰 Harga: *10.000 poin*
 │
@@ -1043,6 +1057,44 @@ if (text.trim() === '.belivip') {
         text: `🎉 *Pembelian Berhasil!*\n\n👑 *Selamat*, kamu telah menjadi *VIP Member*!\n\n💰 Harga: *${hargaVIP} poin*\n🔓 Fitur VIP kini aktif dan bisa kamu gunakan.\n\nTerima kasih telah mendukung bot ini! 🚀`
     });
     return;
+}
+
+if (text === '.belibrat') {
+    const harga = 2500;
+    const durasiMs = 30 * 60 * 1000; // 30 menit
+    const skor = getGroupSkor(sender, from);
+
+    if (isOwner(sender) || isVIP(sender)) {
+        return sock.sendMessage(from, {
+            text: '✅ Kamu sudah punya akses permanen ke fitur *.brat*.'
+        });
+    }
+
+    const now = Date.now();
+    const expired = bratAksesSementara.get(sender);
+
+    if (expired && now < expired) {
+        const sisaMenit = Math.ceil((expired - now) / 60000);
+        return sock.sendMessage(from, {
+            text: `✅ Kamu masih punya akses sementara ke *.brat* selama *${sisaMenit} menit* lagi.`
+        });
+    }
+
+    if (skor < harga) {
+        return sock.sendMessage(from, {
+            text: `❌ *Skor Tidak Cukup!*\n\n📛 Butuh *${harga} poin* untuk beli akses *.brat*\n🎯 Skor kamu: *${skor} poin*\n\n🔥 Main dan kumpulkan skor!`
+        });
+    }
+
+    addGroupSkor(sender, from, -harga);
+    simpanSkorKeFile();
+
+    const waktuBerakhir = moment(now + durasiMs).tz('Asia/Jakarta').format('HH:mm:ss');
+    bratAksesSementara.set(sender, now + durasiMs);
+
+    return sock.sendMessage(from, {
+        text: `✅ *Akses Sementara Berhasil Dibeli!*\n\n📌 Akses *.brat* aktif selama *30 menit*\n💰 Harga: *${harga} poin*\n🕒 Berlaku sampai: *${waktuBerakhir} WIB*\n\nGunakan sepuasnya selama waktu berlaku! 🚀`
+    });
 }
 
 
@@ -1751,18 +1803,17 @@ if (text.trim() === '.kuissusah') {
     const teksSoal = `🎓 *KUIS SUSAH DIMULAI!*\n\n📌 *Soal:* ${soal.soal}\n\n${soal.pilihan.join('\n')}\n\n✍️ Jawab dengan huruf A/B/C/D/E/F dengan mereply pesan ini\n⏱️ Waktu 10 detik!`;
 
     const sent = await sock.sendMessage(from, { text: teksSoal });
-
     const timeout = setTimeout(() => {
-        sesiKuisSusah.delete(sent.key.id);
+    sesiKuisSusah.delete(sent.key.id);
 
-        // Kurangi skor jika waktu habis
-        if (!skorUser[from]) skorUser[from] = {};
-        const skorSekarang = skorUser[from][idUser] || 0;
-        const skorBaru = skorSekarang - 60;
-        skorUser[from][idUser] = skorBaru;
-        simpanSkorKeFile();
-
-
+    // Kurangi skor jika waktu habis
+    const idUser = normalizeJid(sender);
+    if (!skorUser[from]) skorUser[from] = {};
+    const skorSekarang = skorUser[from][idUser] || 0;
+    const skorBaru = skorSekarang - 60;
+    skorUser[from][idUser] = skorBaru;
+    simpanSkorKeFile();
+    
         sock.sendMessage(from, {
             text: `⏰ Waktu habis!\nJawaban yang benar adalah: *${soal.jawaban}*\n❌ Skor kamu dikurangi -60`
         });
@@ -2154,8 +2205,13 @@ if (text.trim().toLowerCase() === '.stiker') {
     }
 
     try {
-        // ⏳ Info sementara
-        const info = await sock.sendMessage(from, { text: "🔄 Sedang membuat stiker..." }, { quoted: msg });
+      
+        await sock.sendMessage(from, {
+            react: {
+                text: '⏳',
+                key: msg.key
+            }
+        });
 
         console.log("📥 Mengunduh media...");
         const mediaBuffer = await downloadMediaMessage(messageForMedia, "buffer", {}, { logger: console });
@@ -2184,6 +2240,13 @@ if (text.trim().toLowerCase() === '.stiker') {
         });
 
         await sock.sendMessage(from, await sticker.toMessage(), { quoted: msg });
+        await sock.sendMessage(from, {
+        react: {
+            text: '✅',
+            key: msg.key
+        }
+    });
+
 
         console.log(`✅ Stiker berhasil dikirim ke ${from}`);
     } catch (err) {
@@ -2213,13 +2276,16 @@ if (text.toLowerCase().startsWith('.teks')) {
         return;
     }
 
-    // ✅ Kirim pesan sedang diproses
+        // Kirim reaction jam pasir
     await sock.sendMessage(from, {
-        text: '🔧 Sedang memproses stiker dengan teks⏳'
-    }, { quoted: msg });
+        react: {
+            text: '⏳',
+            key: msg.key
+        }
+    });
+
 
     try {
-        // 🔁 Unduh stiker yang direply
         const mediaBuffer = await downloadMediaMessage(
             { message: { stickerMessage: stickerQuoted } },
             'buffer',
@@ -2230,38 +2296,68 @@ if (text.toLowerCase().startsWith('.teks')) {
         const image = sharp(mediaBuffer);
         const { width, height } = await image.metadata();
 
-        const fontSize = Math.floor(height * 0.13); // Ukuran teks
-        const verticalOffset = height - 90; // Jarak dari bawah
+        const words = userText.trim().split(/\s+/);
+        const totalWords = words.length;
+        const idealLineCount = Math.ceil(Math.sqrt(totalWords)); // Ex: 4 kata → 2 baris
 
-        const svgText = `
-        <svg width="${width}" height="${height}">
-            <style>
-                .teks {
-                    font-size: ${fontSize}px;
-                    font-family: sans-serif;
-                    font-weight: bold;
-                    fill: white;
-                    stroke: black;
-                    stroke-width: 10px;
-                    paint-order: stroke;
-                }
-            </style>
-            <text x="50%" y="${verticalOffset}" text-anchor="middle" class="teks">${userText}</text>
-        </svg>`;
+        const wordsPerLine = Math.ceil(totalWords / idealLineCount);
+        const lines = [];
+
+        for (let i = 0; i < totalWords; i += wordsPerLine) {
+            lines.push(words.slice(i, i + wordsPerLine).join(' '));
+        }
+
+
+        const lineCount = lines.length;
+        const fontSize = Math.floor(height / (7 + lineCount)); // lebih kecil dan proporsional
+        const lineSpacing = Math.floor(fontSize * 1.1);
+        const verticalOffset = 30; // makin besar, makin ke bawah
+        const startY = height - (lineSpacing * lineCount) + verticalOffset;
+
+
+        let svgText = `
+<svg width="${width}" height="${height}">
+  <style>
+    .teks {
+      font-size: ${fontSize}px;
+      font-family: Arial, sans-serif;
+      font-weight: bold;
+      fill: white;
+      stroke: black;
+      stroke-width: 8px;
+      paint-order: stroke;
+    }
+  </style>
+`;
+
+        lines.forEach((line, index) => {
+            const y = startY + index * lineSpacing;
+            svgText += `<text x="50%" y="${y}" text-anchor="middle" class="teks">${line}</text>\n`;
+        });
+
+        svgText += `</svg>`;
 
         const bufferWithText = await sharp(mediaBuffer)
             .composite([{ input: Buffer.from(svgText), top: 0, left: 0 }])
             .webp()
             .toBuffer();
 
-             const sticker = new Sticker(bufferWithText, {
-    type: 'FULL',
-    pack: 'StikerBot',
-    author: 'JarrAI',
-    quality: 100
-});
+        const sticker = new Sticker(bufferWithText, {
+            type: 'FULL',
+            pack: 'StikerBot',
+            author: 'JarrAI',
+            quality: 100
+        });
 
-await sock.sendMessage(from, await sticker.toMessage(), { quoted: msg });
+        await sock.sendMessage(from, await sticker.toMessage(), { quoted: msg });
+        await sock.sendMessage(from, {
+        react: {
+            text: '✅',
+            key: msg.key
+        }
+    });
+
+
     } catch (err) {
         console.error('❌ Gagal menambahkan teks ke stiker:', err);
         await sock.sendMessage(from, {
@@ -2271,6 +2367,191 @@ await sock.sendMessage(from, await sticker.toMessage(), { quoted: msg });
 
     return;
 }
+
+if (text.toLowerCase().startsWith('.brat')) {
+    const userText = text.replace('.brat', '').trim();
+    if (!userText) {
+        await sock.sendMessage(from, {
+            text: '❌ Contoh: *.brat kamu kemana*'
+        }, { quoted: msg });
+        return;
+    }
+
+    const isBypass = isOwner(sender) || isVIP(sender);
+    const now = Date.now();
+
+    // ✅ Cek apakah ada akses sementara aktif
+    const aksesBrat = bratAksesSementara.get(sender);
+    const isTemporaryActive = aksesBrat && now < aksesBrat;
+
+    // 🔒 Cek limit hanya jika bukan owner/vip/akses sementara
+    if (!isBypass && !isTemporaryActive) {
+        const record = bratLimit.get(sender);
+        if (record) {
+            if (now - record.time < BRAT_COOLDOWN) {
+                if (record.count >= MAX_BRAT) {
+                    const sisa = Math.ceil((BRAT_COOLDOWN - (now - record.time)) / 60000);
+                    await sock.sendMessage(from, {
+                        text: `🚫 *Limit Tercapai*\n\nKamu hanya bisa memakai *.brat* 3x per jam.\n⏳ Tunggu *${sisa} menit* lagi atau beli akses *.belibrat* 30 menit.`,
+                        mentions: [sender]
+                    }, { quoted: msg });
+                    return;
+                } else {
+                    record.count++;
+                }
+            } else {
+                bratLimit.set(sender, { count: 1, time: now });
+            }
+        } else {
+            bratLimit.set(sender, { count: 1, time: now });
+        }
+    }
+
+    // Kirim reaction jam pasir
+await sock.sendMessage(from, {
+    react: {
+        text: '⏳',
+        key: msg.key
+    }
+});
+
+
+    try {
+        const width = 512;
+        const height = 512;
+        const maxLineWidth = 470;
+        let fontSize = 130;
+
+        const words = userText.split(/\s+/);
+
+        const estimateWordWidth = (word, size) => word.length * size * 0.6;
+
+        // Fungsi untuk generate lines berdasarkan fontSize
+        function generateLines(size) {
+            const result = [[]];
+            let currentLineWidth = 0;
+
+            for (let word of words) {
+                const wordWidth = estimateWordWidth(word, size);
+                if (currentLineWidth + wordWidth > maxLineWidth && result[result.length - 1].length > 0) {
+                    result.push([word]);
+                    currentLineWidth = wordWidth;
+                } else {
+                    result[result.length - 1].push(word);
+                    currentLineWidth += wordWidth + 20 + Math.random() * 25;
+                }
+            }
+            return result;
+        }
+
+        function isOverflow(lines, size) {
+            const lineHeight = size + 20;
+            if (lines.length * lineHeight > 480) return true;
+
+            for (const line of lines) {
+                let lineWidth = 0;
+                for (const word of line) {
+                    lineWidth += estimateWordWidth(word, size) + 20 + Math.random() * 25;
+                }
+                if (lineWidth > maxLineWidth) return true;
+            }
+            return false;
+        }
+
+        let lines = [];
+let tryFont = fontSize;
+
+while (tryFont >= 60) {
+    const candidateLines = generateLines(tryFont);
+
+    if (!isOverflow(candidateLines, tryFont)) {
+        lines = candidateLines;
+        fontSize = tryFont;
+        break;
+    }
+
+    // Jika baris terlalu sedikit padahal kata banyak, paksa kecilin font dulu
+    if (candidateLines.length <= 2 && words.length >= 7) {
+        tryFont -= 2;
+    } else {
+        tryFont -= 4;
+    }
+}
+
+// Kalau masih overflow, fallback
+if (lines.length === 0) {
+    fontSize = 60;
+    lines = generateLines(fontSize);
+}
+
+
+        const lineHeight = fontSize + 20;
+        const totalHeight = lines.length * lineHeight;
+        const verticalBias = Math.floor(height * 0.07 + lines.length * 4 + fontSize * 0.20);
+let y = Math.floor((height - totalHeight) / 2) + verticalBias;
+
+
+
+        let svgText = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+  <rect width="100%" height="100%" fill="white"/>
+  <style>
+    .brat {
+      font-family: Arial, sans-serif;
+      fill: black;
+      font-size: ${fontSize}px;
+    }
+  </style>\n`;
+
+        for (const line of lines) {
+            let x = 30;
+            for (let word of line) {
+                const yOffset = y + Math.floor(Math.random() * 6 - 3);
+                svgText += `<text x="${x}" y="${yOffset}" class="brat">${word}</text>\n`;
+                const wordWidth = estimateWordWidth(word, fontSize);
+                x += wordWidth + Math.floor(Math.random() * 25 + 10);
+            }
+            y += lineHeight + Math.floor(Math.random() * 10);
+        }
+
+        svgText += `</svg>`;
+
+        const buffer = await sharp({
+            create: {
+                width,
+                height,
+                channels: 4,
+                background: 'white'
+            }
+        })
+            .composite([{ input: Buffer.from(svgText), top: 0, left: 0 }])
+            .webp()
+            .toBuffer();
+
+        const sticker = new Sticker(buffer, {
+            type: 'FULL',
+            pack: 'brat-anomali',
+            author: 'JarrAI',
+            quality: 100
+        });
+
+        await sock.sendMessage(from, await sticker.toMessage(), { quoted: msg });
+
+        await sock.sendMessage(from, {
+    react: {
+        text: '✅',
+        key: msg.key
+    }
+});
+
+
+    } catch (err) {
+        console.error(err);
+        await sock.sendMessage(from, {
+            text: '❌ Gagal membuat stiker brat.'
+        }, { quoted: msg });
+    }
+}
+
 
 
                 // 📢 TAG SEMUA ANGGOTA GRUP
@@ -2424,8 +2705,12 @@ if (text === '.dwvideo') {
     return;
 }
 
+
 if (text.trim() === '.off') {
-    if (realJid !== OWNER_NUMBER) {
+    const realJid = normalizeJid(sender);
+    const isRealOwner = realJid === OWNER_NUMBER || msg.key.fromMe;
+
+    if (!isRealOwner) {
         await sock.sendMessage(from, {
             text: '❌ Hanya *Owner* yang bisa mematikan bot di grup ini.'
         });
@@ -2446,11 +2731,13 @@ if (text.trim() === '.off') {
     });
 
     await sock.sendMessage(from, {
-        text: `⚠️ *Bot Dimatikan*\n\n🔴 Status: *OFF*\n📅 Tanggal: ${waktu}\n\n👑 Owner: @6283836348226`,
-        mentions: ['6283836348226@s.whatsapp.net']
+        text: `🔴 *Bot Dimatikan*\n\n📅 Tanggal: ${waktu}\n\n👑 Owner: @${OWNER_NUMBER.split('@')[0]}`,
+        mentions: [OWNER_NUMBER]
     });
+
     return;
 }
+
 
 if (text.trim() === '.on') {
     
@@ -2482,37 +2769,6 @@ console.log("isOwner:", isOwner(sender));
 
     await sock.sendMessage(from, {
         text: `✅ *Bot Aktif*\n\n🟢 Status: *ON*\n📅 Tanggal: ${waktu}\n\n👑 Owner: @${OWNER_NUMBER.split('@')[0]}`,
-        mentions: [OWNER_NUMBER]
-    });
-    return;
-}
-
-if (text.trim() === '.off') {
-    const isRealOwner = isOwner(sender) || msg.key.fromMe;
-
-
-    if (!isRealOwner) {
-        await sock.sendMessage(from, {
-            text: '❌ Hanya *Owner* yang bisa mematikan bot di grup ini.'
-        });
-        return;
-    }
-
-    grupAktif.set(from, false);
-    simpanGrupAktif();
-
-    const waktu = new Date().toLocaleString('id-ID', {
-        timeZone: 'Asia/Jakarta',
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-    });
-
-    await sock.sendMessage(from, {
-        text: `🔴 *Bot Dimatikan*\n\n📅 Tanggal: ${waktu}\n\n👑 Owner: @${OWNER_NUMBER.split('@')[0]}`,
         mentions: [OWNER_NUMBER]
     });
     return;
@@ -3249,6 +3505,7 @@ if (text.trim() === '.menu') {
 `ꜱᴇʟᴀᴍᴀᴛ ᴅᴀᴛᴀɴɢ
 
 > ɴᴀᴍᴀ          : ʙᴏᴛ ᴊᴀʀʀ
+> ᴀᴜᴛᴏʀ        : ꜰᴀᴊᴀʀ
 > ᴠᴇʀꜱɪ          : ${versiFancy}
 > ᴛᴀɴɢɢᴀʟ    : ${tanggalFancy}
 
@@ -3278,6 +3535,7 @@ ${readmore}╭─〔 *🤖 ʙᴏᴛ ᴊᴀʀʀ ᴍᴇɴᴜ* 〕─╮
 ├─ 〔 🖼️ *ᴍᴇᴅɪᴀ* 〕
 │ .stiker → Ubah gambar jadi stiker
 │ .teks → Beri teks di stiker
+│ .brat → Membuat stiker kata
 │ .dwfoto → Unduh foto sekali lihat
 │ .dwvideo → Unduh video sekali lihat
 │
