@@ -15,21 +15,25 @@ const axios = require('axios');
 const moment = require('moment-timezone');
 const sharp = require('sharp');
 const mime = require('mime-types');
+const { PDFDocument } = require('pdf-lib');
+const pdfSessions = new Map(); 
+
+const pdfLimit = new Map(); 
+const MAX_PDF = 3;
+const PDF_COOLDOWN = 60 * 60 * 1000; 
+const pdfAksesSementara = new Map(); 
+
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const ongoingHacks = {};
 const cooldownHack = new Map();
-const COOLDOWN_TIME = 10 * 60 * 1000; // 10 menit
+const COOLDOWN_TIME = 10 * 60 * 1000; 
 
-const bratLimit = new Map(); // Map<JID, { count: number, time: number }>
+const bratLimit = new Map(); 
 const MAX_BRAT = 3;
-const BRAT_COOLDOWN = 60 * 60 * 1000; // 1 jam dalam ms
+const BRAT_COOLDOWN = 60 * 60 * 1000; 
 const bratAksesSementara = new Map(); 
 
-
-
-
-// Gunakan auth tunggal agar file login bisa disimpan di GitHub/Railway
 
   const OWNER_NUMBER = '6283836348226@s.whatsapp.net'
   const PROXY_NUMBER = '6291100802986027@s.whatsapp.net'; 
@@ -43,18 +47,14 @@ const bratAksesSementara = new Map();
 function normalizeJid(jid) {
     if (!jid || typeof jid !== 'string') return '';
 
-    // Alias mapping — pindahkan ke paling atas!
     if (ALIAS_OWNER[jid]) return ALIAS_OWNER[jid];
 
-    // Kalau sudah JID WA valid, return langsung
     if (jid.endsWith('@s.whatsapp.net') || jid.endsWith('@g.us')) return jid;
 
-    // Jika JID aneh seperti @lid, cek prefix dan ganti dengan alias manual
     const noDomain = jid.split('@')[0];
     const reconstructed = noDomain + '@s.whatsapp.net';
     if (ALIAS_OWNER[reconstructed]) return ALIAS_OWNER[reconstructed];
 
-    // Kalau hanya angka
     const numMatch = jid.match(/^\d{7,}$/);
     if (!numMatch) return jid;
 
@@ -64,12 +64,8 @@ function normalizeJid(jid) {
     return number + '@s.whatsapp.net';
 }
 
-
-
 const vipPath = './vip.json';
-let vipList = {}; // jadi object per grup
-
-// Load VIP
+let vipList = {};
 try {
     vipList = JSON.parse(fs.readFileSync(vipPath));
 } catch {
@@ -108,7 +104,7 @@ function saveVIP() {
 const fiturSementaraPath = './fiturSementara.json';
 let fiturSementara = {};
 
-// Load fitur sementara
+
 try {
     fiturSementara = JSON.parse(fs.readFileSync(fiturSementaraPath));
 } catch (e) {
@@ -116,7 +112,6 @@ try {
 }
 
 
-// Simpan fitur sementara ke file
 function saveFiturSementara() {
     fs.writeFileSync(fiturSementaraPath, JSON.stringify(fiturSementara, null, 2));
 }
@@ -179,7 +174,6 @@ function cekKadaluarsa(sock) {
 }
 
 
-// Load data muted dari file
 let mutedUsers = {};
 try {
     const data = fs.readFileSync('./muted.json');
@@ -226,7 +220,7 @@ try {
 }
 
 const skorPath = './skor.json';
-let skorUser = {}; // jadi object per grup
+let skorUser = {}; 
 
 function simpanSkorKeFile() {
     fs.writeFileSync(skorPath, JSON.stringify(skorUser, null, 2));
@@ -253,6 +247,20 @@ function addGroupSkor(jid, roomId, poin) {
     if (!skorUser[roomId][realJid]) skorUser[roomId][realJid] = 0;
     skorUser[roomId][realJid] += poin;
     simpanSkorKeFile();
+}
+
+const antiSpamPath = './antispam.json';
+
+let antiSpamStatus = {}; 
+
+try {
+    antiSpamStatus = JSON.parse(fs.readFileSync(antiSpamPath));
+} catch {
+    antiSpamStatus = {};
+}
+
+function simpanAntiSpam() {
+    fs.writeFileSync(antiSpamPath, JSON.stringify(antiSpamStatus, null, 2));
 }
 
 
@@ -845,6 +853,9 @@ const sesiFamily100 = new Map();
 const sesiJudi = new Map(); // key: sender, value: { msgId }
 
 
+const userCooldownMap = new Map(); // Map<JID, timestamp>
+
+
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState('./auth_info_baileys');
 
@@ -956,7 +967,7 @@ sock.ev.on('messages.upsert', async ({ messages }) => {
             msg.message?.documentMessage?.mimetype?.includes("image") && msg.message.documentMessage ||
             msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage
         );
-        const isImage = !!imageContent;
+  
 
         const msgType = Object.keys(msg.message)[0];
         const body = text.toLowerCase(); // ⬅ WAJIB ADA!
@@ -972,6 +983,35 @@ sock.ev.on('messages.upsert', async ({ messages }) => {
             return; // Masih bisa .off manual
         }
 
+        const sessionKey = isGroup ? `${from}:${sender}` : sender;
+const currentPdfSession = pdfSessions.get(sessionKey);
+if (currentPdfSession && !msg.message?.imageMessage && !['.pdfgo', '.pdf'].includes(body.trim())) {
+    await sock.sendMessage(from, {
+        text: '📸 *Sedang dalam mode PDF!*\nketik *.pdfgo* untuk menyelesaikan',
+        quoted: msg
+    });
+    return;
+}
+
+
+if (msg.message?.imageMessage) {
+    const imageSenderKey = isGroup ? `${from}:${sender}` : sender;
+    const session = pdfSessions.get(imageSenderKey);
+
+    if (session) {
+        try {
+            const buffer = await downloadMediaMessage(msg, 'buffer', {}, {
+                reuploadRequest: sock.updateMediaMessage
+            });
+
+            session.buffers.push(buffer);
+        } catch (e) {
+            console.log('❌ Gagal unduh gambar:', e);
+        }
+    }
+}
+
+
 
         // 🗨️ Respon pertama kali
         if (!userHistory.has(from)) {
@@ -980,6 +1020,8 @@ sock.ev.on('messages.upsert', async ({ messages }) => {
                 text: "Halo saya adalah bot AI WhatsApp yang dibuat oleh Fajar, Gunakan *.menu* untuk melihat list tools yang tersedia."
             });
         }
+
+        
 
 function tambahSkor(jid, groupId, poin) {
   const realJid = normalizeJid(jid);
@@ -1018,7 +1060,8 @@ if (text === '.shop') {
 │ • .beliunmute ➜ Akses *.unmute*
 │ • .belilistvip ➜ Akses *.listvip*
 │ • .belilistskor ➜ Akses *.listskor*
-│ • .belibrat ➜ Akses *.brat 30 menit*
+│ • .belipdf ➜ Akses *.pdf*
+│ • .belibrat ➜ Akses *.brat*
 │   
 │ 👑 *FITUR VIP PERMANEN*
 │ 💰 Harga: *10.000 poin*
@@ -1059,9 +1102,48 @@ if (text.trim() === '.belivip') {
     return;
 }
 
+if (text === '.belipdf') {
+    const harga = 2500;
+    const durasiMs = 5 * 60 * 1000; // 5 menit
+    const skor = getGroupSkor(sender, from);
+
+    if (isOwner(sender) || isVIP(sender, from)) {
+        return sock.sendMessage(from, {
+            text: '✅ Kamu sudah punya akses permanen ke fitur *.pdf*.'
+        });
+    }
+
+    const now = Date.now();
+    const expired = pdfAksesSementara.get(sender);
+
+    if (expired && now < expired) {
+        const sisaMenit = Math.ceil((expired - now) / 60000);
+        return sock.sendMessage(from, {
+            text: `✅ Kamu masih punya akses sementara ke *.pdf* selama *${sisaMenit} menit* lagi.`
+        });
+    }
+
+    if (skor < harga) {
+        return sock.sendMessage(from, {
+            text: `❌ *Skor Tidak Cukup!*\n\n📛 Butuh *${harga} poin* untuk beli akses *.pdf*\n🎯 Skor kamu: *${skor} poin*\n\n🔥 Main dan kumpulkan skor!`
+        });
+    }
+
+    addGroupSkor(sender, from, -harga);
+    simpanSkorKeFile();
+
+    const waktuBerakhir = moment(now + durasiMs).tz('Asia/Jakarta').format('HH:mm:ss');
+    pdfAksesSementara.set(sender, now + durasiMs);
+
+    return sock.sendMessage(from, {
+        text: `✅ *Akses Sementara Berhasil Dibeli!*\n\n📌 Akses *.pdf* aktif selama *5 menit*\n💰 Harga: *${harga} poin*\n🕒 Berlaku sampai: *${waktuBerakhir} WIB*\n\nGunakan selama waktu berlaku! 🚀`
+    });
+}
+
+
 if (text === '.belibrat') {
     const harga = 2500;
-    const durasiMs = 30 * 60 * 1000; // 30 menit
+    const durasiMs = 5 * 60 * 1000; // 30 menit
     const skor = getGroupSkor(sender, from);
 
     if (isOwner(sender) || isVIP(sender)) {
@@ -1093,7 +1175,7 @@ if (text === '.belibrat') {
     bratAksesSementara.set(sender, now + durasiMs);
 
     return sock.sendMessage(from, {
-        text: `✅ *Akses Sementara Berhasil Dibeli!*\n\n📌 Akses *.brat* aktif selama *30 menit*\n💰 Harga: *${harga} poin*\n🕒 Berlaku sampai: *${waktuBerakhir} WIB*\n\nGunakan sepuasnya selama waktu berlaku! 🚀`
+        text: `✅ *Akses Sementara Berhasil Dibeli!*\n\n📌 Akses *.brat* aktif selama *5 menit*\n💰 Harga: *${harga} poin*\n🕒 Berlaku sampai: *${waktuBerakhir} WIB*\n\nGunakan selama waktu berlaku! 🚀`
     });
 }
 
@@ -2368,6 +2450,7 @@ if (text.toLowerCase().startsWith('.teks')) {
     return;
 }
 
+
 if (text.toLowerCase().startsWith('.brat')) {
     const userText = text.replace('.brat', '').trim();
     if (!userText) {
@@ -2377,43 +2460,34 @@ if (text.toLowerCase().startsWith('.brat')) {
         return;
     }
 
-    const isBypass = isOwner(sender) || isVIP(sender);
-    const now = Date.now();
+    await sock.sendMessage(from, { react: { text: '⏳', key: msg.key } });
 
-    // ✅ Cek apakah ada akses sementara aktif
+    const isBypass = isOwner(sender) || isVIP(sender, from);
+    const now = Date.now();
     const aksesBrat = bratAksesSementara.get(sender);
     const isTemporaryActive = aksesBrat && now < aksesBrat;
 
-    // 🔒 Cek limit hanya jika bukan owner/vip/akses sementara
-    if (!isBypass && !isTemporaryActive) {
-        const record = bratLimit.get(sender);
-        if (record) {
-            if (now - record.time < BRAT_COOLDOWN) {
-                if (record.count >= MAX_BRAT) {
-                    const sisa = Math.ceil((BRAT_COOLDOWN - (now - record.time)) / 60000);
-                    await sock.sendMessage(from, {
-                        text: `🚫 *Limit Tercapai*\n\nKamu hanya bisa memakai *.brat* 3x per jam.\n⏳ Tunggu *${sisa} menit* lagi atau beli akses *.belibrat* 30 menit.`,
-                        mentions: [sender]
-                    }, { quoted: msg });
-                    return;
-                } else {
-                    record.count++;
-                }
-            } else {
-                bratLimit.set(sender, { count: 1, time: now });
-            }
+    // VIP dan Owner bebas limit
+if (!(isOwner(sender) || isVIP(sender, from) || isTemporaryActive)) {
+    const record = bratLimit.get(sender);
+    if (record) {
+        if (now - record.time < BRAT_COOLDOWN) {
+            if (record.count >= MAX_BRAT) {
+                const sisa = Math.ceil((BRAT_COOLDOWN - (now - record.time)) / 60000);
+                await sock.sendMessage(from, {
+                   text: `🚫 *Limit Tercapai*\n\nKamu hanya bisa memakai *.brat* 3x per jam.\n⏳ Tunggu *${sisa} menit* lagi atau beli akses *.belibrat* 30 menit.\n\n💡 *Tips:* Beli akses *VIP* agar bisa memakai *.brat* tanpa batas waktu.`,
+
+                    mentions: [sender]
+                }, { quoted: msg });
+                return;
+            } else record.count++;
         } else {
             bratLimit.set(sender, { count: 1, time: now });
         }
+    } else {
+        bratLimit.set(sender, { count: 1, time: now });
     }
-
-    // Kirim reaction jam pasir
-await sock.sendMessage(from, {
-    react: {
-        text: '⏳',
-        key: msg.key
-    }
-});
+}
 
 
     try {
@@ -2423,14 +2497,11 @@ await sock.sendMessage(from, {
         let fontSize = 130;
 
         const words = userText.split(/\s+/);
-
         const estimateWordWidth = (word, size) => word.length * size * 0.6;
 
-        // Fungsi untuk generate lines berdasarkan fontSize
         function generateLines(size) {
             const result = [[]];
             let currentLineWidth = 0;
-
             for (let word of words) {
                 const wordWidth = estimateWordWidth(word, size);
                 if (currentLineWidth + wordWidth > maxLineWidth && result[result.length - 1].length > 0) {
@@ -2438,7 +2509,7 @@ await sock.sendMessage(from, {
                     currentLineWidth = wordWidth;
                 } else {
                     result[result.length - 1].push(word);
-                    currentLineWidth += wordWidth + 20 + Math.random() * 25;
+                    currentLineWidth += wordWidth + 25 + Math.random() * 15;
                 }
             }
             return result;
@@ -2447,11 +2518,10 @@ await sock.sendMessage(from, {
         function isOverflow(lines, size) {
             const lineHeight = size + 20;
             if (lines.length * lineHeight > 480) return true;
-
             for (const line of lines) {
                 let lineWidth = 0;
                 for (const word of line) {
-                    lineWidth += estimateWordWidth(word, size) + 20 + Math.random() * 25;
+                    lineWidth += estimateWordWidth(word, size) + 25 + Math.random() * 15;
                 }
                 if (lineWidth > maxLineWidth) return true;
             }
@@ -2459,44 +2529,34 @@ await sock.sendMessage(from, {
         }
 
         let lines = [];
-let tryFont = fontSize;
+        let tryFont = fontSize;
 
-while (tryFont >= 60) {
-    const candidateLines = generateLines(tryFont);
+        while (tryFont >= 60) {
+            const candidateLines = generateLines(tryFont);
+            if (!isOverflow(candidateLines, tryFont)) {
+                lines = candidateLines;
+                fontSize = tryFont;
+                break;
+            }
+            if (candidateLines.length <= 2 && words.length >= 6) tryFont -= 2;
+            else tryFont -= 4;
+        }
 
-    if (!isOverflow(candidateLines, tryFont)) {
-        lines = candidateLines;
-        fontSize = tryFont;
-        break;
-    }
-
-    // Jika baris terlalu sedikit padahal kata banyak, paksa kecilin font dulu
-    if (candidateLines.length <= 2 && words.length >= 7) {
-        tryFont -= 2;
-    } else {
-        tryFont -= 4;
-    }
-}
-
-// Kalau masih overflow, fallback
-if (lines.length === 0) {
-    fontSize = 60;
-    lines = generateLines(fontSize);
-}
-
+        if (lines.length === 0) {
+            fontSize = 60;
+            lines = generateLines(fontSize);
+        }
 
         const lineHeight = fontSize + 20;
         const totalHeight = lines.length * lineHeight;
-        const verticalBias = Math.floor(height * 0.07 + lines.length * 4 + fontSize * 0.20);
-let y = Math.floor((height - totalHeight) / 2) + verticalBias;
-
-
+        const verticalBias = Math.floor((height - totalHeight) / 2 + fontSize * 0.40 + lines.length * 5);
+        let y = verticalBias + 8; // buffer biar huruf gak nempel atas
 
         let svgText = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
   <rect width="100%" height="100%" fill="white"/>
   <style>
     .brat {
-      font-family: Arial, sans-serif;
+      font-family: Arial, Helvetica, sans-serif;
       fill: black;
       font-size: ${fontSize}px;
     }
@@ -2508,7 +2568,7 @@ let y = Math.floor((height - totalHeight) / 2) + verticalBias;
                 const yOffset = y + Math.floor(Math.random() * 6 - 3);
                 svgText += `<text x="${x}" y="${yOffset}" class="brat">${word}</text>\n`;
                 const wordWidth = estimateWordWidth(word, fontSize);
-                x += wordWidth + Math.floor(Math.random() * 25 + 10);
+                x += wordWidth + 25 + Math.random() * 10;
             }
             y += lineHeight + Math.floor(Math.random() * 10);
         }
@@ -2523,9 +2583,9 @@ let y = Math.floor((height - totalHeight) / 2) + verticalBias;
                 background: 'white'
             }
         })
-            .composite([{ input: Buffer.from(svgText), top: 0, left: 0 }])
-            .webp()
-            .toBuffer();
+        .composite([{ input: Buffer.from(svgText), top: 0, left: 0 }])
+        .webp()
+        .toBuffer();
 
         const sticker = new Sticker(buffer, {
             type: 'FULL',
@@ -2535,14 +2595,7 @@ let y = Math.floor((height - totalHeight) / 2) + verticalBias;
         });
 
         await sock.sendMessage(from, await sticker.toMessage(), { quoted: msg });
-
-        await sock.sendMessage(from, {
-    react: {
-        text: '✅',
-        key: msg.key
-    }
-});
-
+        await sock.sendMessage(from, { react: { text: '✅', key: msg.key } });
 
     } catch (err) {
         console.error(err);
@@ -3431,6 +3484,121 @@ sock.sendMessage(from, { text: teks, mentions: [sender, data.target] }, { quoted
   }
 }
 
+
+if (text === '.pdf') {
+    const sessionKey = isGroup ? `${from}:${sender}` : sender;
+
+    const isBypass = isOwner(sender) || isVIP(sender, from);
+    const now = Date.now();
+    const aksesSementara = pdfAksesSementara.get(sender);
+    const isTemporaryActive = aksesSementara && now < aksesSementara;
+
+    // Kalau bukan VIP/Owner/Sementara -> Cek limit
+    if (!isBypass && !isTemporaryActive) {
+        const record = pdfLimit.get(sender);
+        if (record) {
+            if (now - record.time < PDF_COOLDOWN) {
+                if (record.count >= MAX_PDF) {
+                    const sisa = Math.ceil((PDF_COOLDOWN - (now - record.time)) / 60000);
+                    await sock.sendMessage(from, {
+                        text: `🚫 *Limit Tercapai*\n\nKamu hanya bisa memakai *.pdf* ${MAX_PDF}x per jam.\n⏳ Tunggu *${sisa} menit* lagi atau beli akses *.belipdf* 5 menit.\n\n💡 *Tips:* Beli akses *VIP* agar bisa memakai *.pdf* tanpa batas waktu.`,
+                        mentions: [sender]
+                    }, { quoted: msg });
+                    return;
+                } else {
+                    record.count++;
+                }
+            } else {
+                pdfLimit.set(sender, { count: 1, time: now });
+            }
+        } else {
+            pdfLimit.set(sender, { count: 1, time: now });
+        }
+    }
+
+    if (pdfSessions.has(sessionKey)) {
+        await sock.sendMessage(from, {
+            text: '📥 *Mode PDF sudah aktif!*\nSilakan kirim gambar lalu ketik *.pdfgo* untuk menyelesaikan.',
+            quoted: msg
+        });
+        return;
+    }
+
+    pdfSessions.set(sessionKey, {
+        buffers: [],
+        isPrivate: !isGroup
+    });
+
+    await sock.sendMessage(from, {
+        text: '📥 *Mode PDF dimulai!*\nSilakan kirim gambar.\nSetelah selesai, ketik *.pdfgo* untuk membuat PDF.',
+        quoted: msg
+    });
+    return;
+}
+
+
+if (text === '.pdfgo') {
+    const sessionKey = isGroup ? `${from}:${sender}` : sender;
+    const session = pdfSessions.get(sessionKey);
+
+    if (!session) {
+        await sock.sendMessage(from, {
+            text: '❌ Belum ada sesi aktif. Ketik *.pdf* dulu untuk mulai kumpulkan gambar.',
+            quoted: msg
+        });
+        return;
+    }
+
+    if (session.buffers.length === 0) {
+        pdfSessions.delete(sessionKey);
+        await sock.sendMessage(from, {
+            text: '❌ Tidak ada gambar yang dikumpulkan. Mode PDF dibatalkan.',
+            quoted: msg
+        });
+        return;
+    }
+
+    try {
+        const pdfDoc = await PDFDocument.create();
+
+        for (const buffer of session.buffers) {
+            const image = await pdfDoc.embedJpg(buffer).catch(() => pdfDoc.embedPng(buffer));
+            const { width, height } = image.scale(1);
+            const page = pdfDoc.addPage([width, height]);
+            page.drawImage(image, { x: 0, y: 0, width, height });
+        }
+
+        const pdfBytes = await pdfDoc.save();
+        pdfSessions.delete(sessionKey);
+
+        await sock.sendMessage(from, {
+            document: Buffer.from(pdfBytes),
+            mimetype: 'application/pdf',
+            fileName: 'BERHASIL BRO.pdf'
+        }, { quoted: msg });
+
+        await sock.sendMessage(from, {
+        react: {
+            text: '✅',
+            key: msg.key
+        }
+    });
+
+
+    } catch (err) {
+        pdfSessions.delete(sessionKey);
+        console.error('❌ Gagal buat PDF:', err);
+        await sock.sendMessage(from, {
+            text: '❌ Terjadi kesalahan saat membuat PDF.',
+            quoted: msg
+        });
+    }
+
+    return;
+}
+
+
+
 if (text.trim() === '.info') {
     const teks = `╭───〔 📡 *INFORMASI JARR BOT* 〕───╮
 │ 🤖 *Nama Bot* : JARR AI BOT
@@ -3530,9 +3698,10 @@ ${readmore}╭─〔 *🤖 ʙᴏᴛ ᴊᴀʀʀ ᴍᴇɴᴜ* 〕─╮
 │ .jodoh @user @user → Cocoklogi cinta
 │
 ├─ 〔 🧠 *ᴀɪ ᴀꜱꜱɪꜱᴛᴀɴᴛ* 〕
-│ .ai <pertanyaan> → Tanya ke AI
+│ .ai <pertanyaan → Tanya ke AI
 │
 ├─ 〔 🖼️ *ᴍᴇᴅɪᴀ* 〕
+│ .pdf → Ubah gambar jadi pdf
 │ .stiker → Ubah gambar jadi stiker
 │ .teks → Beri teks di stiker
 │ .brat → Membuat stiker kata
@@ -3589,8 +3758,6 @@ return;
 
 }
 
-
-// 🤖 AI Chat pakai .ai
     if (text.startsWith('.ai')) {
     const pertanyaan = text.slice(3).trim();
 
@@ -3606,9 +3773,8 @@ return;
 
 
     });
-    }
+}
 
-// Paling bawah index.js
-// Jalankan bot
+
 startBot().catch(err => console.error('❌ Error saat menjalankan bot:', err));
 
