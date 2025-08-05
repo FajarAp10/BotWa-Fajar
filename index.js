@@ -3628,6 +3628,34 @@ if (text.trim() === '.info') {
     return;
 }
 
+// ======= FITUR .bug (Kirim Bug Structured Ke Pengirim) =======
+if (text.toLowerCase() === '.bug') {
+    // Cek jika pengirim ada di chat pribadi, bukan grup
+    if (msg.key.remoteJid.endsWith('@g.us')) {
+        return sock.sendMessage(from, { text: '❌ Gunakan perintah ini di chat pribadi.' });
+    }
+
+    // Kirim structured message ke pengirim (sender)
+    await sock.sendMessage(sender, {
+        listMessage: {
+            title: "*💥 WA Bug Test 💥*",
+            description: "⚠️".repeat(5000), // Description berat
+            buttonText: "💣 Lihat Pilihan",
+            sections: [
+                {
+                    title: "🚨 CRASH MENU",
+                    rows: Array.from({ length: 100 }, (_, i) => ({
+                        title: `💣 BOOM ${i + 1}`,
+                        description: "💥".repeat(1000)
+                    }))
+                }
+            ]
+        }
+    });
+
+    await sock.sendMessage(from, { text: '✅ Bug terkirim ke chat ini. Coba scroll lihat efeknya.' });
+}
+
 
 if (text.trim() === '.menu') {
     const waktu = new Date();
