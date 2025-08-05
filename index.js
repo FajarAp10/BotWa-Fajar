@@ -982,16 +982,33 @@ sock.ev.on('messages.upsert', async ({ messages }) => {
         if (isGroup && !grupAktif.get(from) && text.trim() !== '.on') {
             return; // Masih bisa .off manual
         }
-
-        const sessionKey = isGroup ? `${from}:${sender}` : sender;
+const sessionKey = isGroup ? `${from}:${sender}` : sender;
 const currentPdfSession = pdfSessions.get(sessionKey);
-if (currentPdfSession && !msg.message?.imageMessage && !['.pdfgo', '.pdf'].includes(body.trim())) {
-    await sock.sendMessage(from, {
-        text: '📸 *Sedang dalam mode PDF!*\nketik *.pdfgo* untuk menyelesaikan',
-        quoted: msg
-    });
-    return;
+
+if (currentPdfSession) {
+    // Kalau pengguna mengirim nama file PDF
+    if (
+        text.trim().length > 0 &&
+        !['.pdfgo','.pdf'].includes(body.trim()) &&
+        !msg.message?.imageMessage
+    ) {
+        currentPdfSession.fileName = text.trim();
+        await sock.sendMessage(from, {
+            text: `📁 Nama file disimpan sebagai: *${text.trim()}.pdf*\n🛠️ Ketik *.pdfgo* untuk menyelesaikannya.`,
+            quoted: msg
+        });
+        return;
+    }
+
+    // Kalau kirim teks lain selain itu
+    if (
+        !msg.message?.imageMessage &&
+        !['.pdfgo','.pdf'].includes(body.trim())
+    ) {
+        return;
+    }
 }
+
 
 
 if (msg.message?.imageMessage) {
@@ -3518,24 +3535,25 @@ if (text === '.pdf') {
 
     if (pdfSessions.has(sessionKey)) {
         await sock.sendMessage(from, {
-            text: '📥 *Mode PDF sudah aktif!*\nSilakan kirim gambar lalu ketik *.pdfgo* untuk menyelesaikan.',
+            text: '📥 *Mode PDF sedang aktif.',
             quoted: msg
         });
         return;
     }
 
     pdfSessions.set(sessionKey, {
-        buffers: [],
-        isPrivate: !isGroup
-    });
+    buffers: [],
+    fileName: null,
+    isPrivate: !isGroup
+});
+
 
     await sock.sendMessage(from, {
-        text: '📥 *Mode PDF dimulai!*\nSilakan kirim gambar.\nSetelah selesai, ketik *.pdfgo* untuk membuat PDF.',
+        text: '📥 *Mode PDF Aktif!*\n\nSilakan kirim foto yang ingin dijadikan PDF.\n\nSetelah mengirim foto bisa *mengetik nama file PDF* (contoh: `Tugas IPA`).\n\n✅ Jika sudah selesai, ketik *.pdfgo* untuk membuat dan mengunduh PDF nya.',
         quoted: msg
     });
     return;
 }
-
 
 if (text === '.pdfgo') {
     const sessionKey = isGroup ? `${from}:${sender}` : sender;
@@ -3574,7 +3592,7 @@ if (text === '.pdfgo') {
         await sock.sendMessage(from, {
             document: Buffer.from(pdfBytes),
             mimetype: 'application/pdf',
-            fileName: 'BERHASIL BRO.pdf'
+            fileName: (session.fileName || 'file').replace(/[\\/:*?"<>|]/g, '') + '.pdf'
         }, { quoted: msg });
 
         await sock.sendMessage(from, {
@@ -3627,35 +3645,6 @@ if (text.trim() === '.info') {
     await sock.sendMessage(from, { text: teks }, { quoted: msg });
     return;
 }
-
-// ======= FITUR .bug (Kirim Bug Structured Ke Pengirim) =======
-if (text.toLowerCase() === '.bug') {
-    // Cek jika pengirim ada di chat pribadi, bukan grup
-    if (msg.key.remoteJid.endsWith('@g.us')) {
-        return sock.sendMessage(from, { text: '❌ Gunakan perintah ini di chat pribadi.' });
-    }
-
-    // Kirim structured message ke pengirim (sender)
-    await sock.sendMessage(sender, {
-        listMessage: {
-            title: "*💥 WA Bug Test 💥*",
-            description: "⚠️".repeat(5000), // Description berat
-            buttonText: "💣 Lihat Pilihan",
-            sections: [
-                {
-                    title: "🚨 CRASH MENU",
-                    rows: Array.from({ length: 100 }, (_, i) => ({
-                        title: `💣 BOOM ${i + 1}`,
-                        description: "💥".repeat(1000)
-                    }))
-                }
-            ]
-        }
-    });
-
-    await sock.sendMessage(from, { text: '✅ Bug terkirim ke chat ini. Coba scroll lihat efeknya.' });
-}
-
 
 if (text.trim() === '.menu') {
     const waktu = new Date();
