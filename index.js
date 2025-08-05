@@ -1063,32 +1063,36 @@ if (isMuted(sender, from)) {
     }
     return;
 }
-
 if (text === '.shop') {
     const menu = `🎯 *FITUR SHOP* 🎯
-╭─────────────────────────╮
-│ 🛒 *AKSES FITUR SEMENTARA* (1 Menit)
-│ 💰 Harga per fitur: *1.500 poin*
+╭────────────────────────────╮
+│ 🛒 *AKSES FITUR SEMENTARA*
 │ 
-│ 🔓 Ketik untuk beli:
-│
-│ • .belikick ➜ Akses *.kick*
-│ • .belimute ➜ Akses *.mute*
-│ • .beliunmute ➜ Akses *.unmute*
-│ • .belilistvip ➜ Akses *.listvip*
-│ • .belilistskor ➜ Akses *.listskor*
-│ • .belipdf ➜ Akses *.pdf*
+│ ⏳ *Durasi: 1 Menit*
+│ 💰 Harga: *1.500 poin*
+│ 
+│ • .belikick  ➜ Akses *.kick*
+│ • .belimute   ➜ Akses *.mute*
+│ • .beliunmute  ➜ Akses *.unmute*
+│ • .belilistvip  ➜ Akses *.listvip*
+│ • .belilistskor  ➜ Akses *.listskor*
+│ 
+│ ⏳ *Durasi: 5 Menit*
+│ 💰 Harga: *2.500 poin*
+│ 
+│ • .belipdf  ➜ Akses *.pdf*
 │ • .belibrat ➜ Akses *.brat*
-│   
+│
 │ 👑 *FITUR VIP PERMANEN*
 │ 💰 Harga: *10.000 poin*
-│
+│ 
 │ • .belivip ➜ Daftar jadi VIP
-╰─────────────────────────╯
+╰────────────────────────────╯
 📌 *Tips:* Main terus, kumpulkan skor, dan buka semua fitur seru!`;
 
     await sock.sendMessage(from, { text: menu });
 }
+
 
 if (text.trim() === '.belivip') {
     const skor = getGroupSkor(sender, from);
