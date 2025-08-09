@@ -897,25 +897,8 @@ sock.ev.on('connection.update', async (update) => {
 
     } else if (connection === 'open') {
         console.log('✅ Bot aktif!');
+        wasDisconnected = false;
 
-        if (wasDisconnected) {
-            wasDisconnected = false;
-
-            try {
-                const chats = await sock.groupFetchAllParticipating();
-                const grupList = Object.keys(chats);
-
-                for (const grupId of grupList) {
-                    await sock.sendMessage(grupId, {
-                        text: '🔔 *Bot aktif kembali!*\nMohon maaf ada sedikit kendala.'
-                    });
-                }
-
-                console.log(`✅ Notifikasi dikirim ke ${grupList.length} grup.`);
-            } catch (e) {
-                console.error('❌ Gagal kirim notifikasi ke grup:', e);
-            }
-        }
     }
 });
 
@@ -934,7 +917,7 @@ async function safeSend(jid, content, options = {}) {
 
 sock.ev.on('messages.upsert', async ({ messages }) => {
     const msg = messages[0];
-    if (!msg.message || msg.key.fromMe) return;
+    if (!msg.message) return;
 
     const from = msg.key.remoteJid; // ID room: grup atau pribadi
     const isGroup = from.endsWith('@g.us');
@@ -973,9 +956,8 @@ sock.ev.on('messages.upsert', async ({ messages }) => {
         const body = text.toLowerCase(); // ⬅ WAJIB ADA!
         console.log(`📩 Pesan dari ${from}: ${text}`);
 
-            
         if (isGroup && !grupAktif.has(from)) {
-            grupAktif.set(from, true); // Otomatis aktif saat grup baru
+            grupAktif.set(from, false); // Otomatis aktif saat grup baru
             simpanGrupAktif();
         }
 
@@ -1029,16 +1011,6 @@ if (msg.message?.imageMessage) {
 }
 
 
-
-        // 🗨️ Respon pertama kali
-        if (!userHistory.has(from)) {
-            userHistory.add(from);
-            await sock.sendMessage(from, {
-                text: "Halo saya adalah bot AI WhatsApp yang dibuat oleh Fajar, Gunakan *.menu* untuk melihat list tools yang tersedia."
-            });
-        }
-
-        
 
 function tambahSkor(jid, groupId, poin) {
   const realJid = normalizeJid(jid);
@@ -2199,9 +2171,8 @@ if (text.startsWith('.ttmp3')) {
         return;
     }
 
-    await sock.sendMessage(from, {
-        text: `🎵 Mengambil audio TikTok... ${userTag}`,
-        mentions: [sender]
+        await sock.sendMessage(from, {
+        react: { text: '⏳', key: msg.key }
     });
 
     try {
@@ -2222,6 +2193,10 @@ if (text.startsWith('.ttmp3')) {
             audio: audioBuffer,
             mimetype: 'audio/mp4', // bisa juga 'audio/mpeg'
             ptt: false
+        });
+
+        await sock.sendMessage(from, {
+        react: { text: '✅', key: msg.key }
         });
 
         console.log(`✅ Audio TikTok berhasil dikirim ke ${from}`);
@@ -2248,9 +2223,9 @@ if (text.startsWith('.wm')) {
     }
 
     await sock.sendMessage(from, {
-        text: `⏳ Mengambil video TikTok... ${userTag}`,
-        mentions: [sender]
+        react: { text: '⏳', key: msg.key }
     });
+
 
     try {
         const { data } = await axios.get(`https://tikwm.com/api/`, {
@@ -2265,6 +2240,11 @@ if (text.startsWith('.wm')) {
 
         const videoRes = await axios.get(videoURL, { responseType: 'arraybuffer' });
         const videoBuffer = Buffer.from(videoRes.data, 'binary');
+
+        await sock.sendMessage(from, {
+        react: { text: '✅', key: msg.key }
+        });
+
 
         await sock.sendMessage(from, {
             video: videoBuffer,
@@ -2359,6 +2339,74 @@ if (text.trim().toLowerCase() === '.stiker') {
 
     return;
 }
+
+// 🖼️ KONVERSI STIKER JADI GAMBAR (PAKAI REACTION)
+if (text.trim().toLowerCase() === '.toimg') {
+    const quoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+    const stickerDirect = msg.message?.stickerMessage;
+    const stickerQuoted = quoted?.stickerMessage;
+
+    // Tentukan sumber media
+    const messageForMedia = stickerDirect
+        ? msg // user langsung kirim sticker + ketik .toimg di caption
+        : stickerQuoted
+            ? {
+                ...msg,
+                message: {
+                    stickerMessage: stickerQuoted
+                }
+            }
+            : null;
+
+    if (!messageForMedia) {
+        await sock.sendMessage(from, { text: "❌ Balas sticker atau kirim sticker dengan perintah *.toimg*" });
+        return;
+    }
+
+    try {
+        // Reaction jam pasir
+        await sock.sendMessage(from, {
+            react: { text: '⏳', key: msg.key }
+        });
+
+        // Download sticker (pakai objek pesan lengkap)
+        const mediaBuffer = await downloadMediaMessage(
+            messageForMedia,
+            "buffer",
+            {},
+            { logger: console }
+        );
+
+        // Convert webp ke png
+        const sharp = require('sharp');
+        const imgBuffer = await sharp(mediaBuffer)
+            .png()
+            .toBuffer();
+
+        // Kirim gambar
+        await sock.sendMessage(from, {
+            image: imgBuffer,
+            caption: "✅ Sticker berhasil diubah jadi gambar"
+        }, { quoted: msg });
+
+        // Reaction sukses
+        await sock.sendMessage(from, {
+            react: { text: '✅', key: msg.key }
+        });
+
+        console.log(`✅ Sticker di ${from} berhasil diubah jadi gambar`);
+    } catch (err) {
+        console.error("❌ Gagal mengubah sticker:", err);
+        await sock.sendMessage(from, {
+            react: { text: '❌', key: msg.key }
+        });
+        await sock.sendMessage(from, { text: "❌ Gagal mengubah sticker jadi gambar" });
+    }
+
+    return;
+}
+
+
 
 if (text.toLowerCase().startsWith('.teks')) {
     const quotedMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
@@ -2576,12 +2624,12 @@ if (!(isOwner(sender) || isVIP(sender, from) || isTemporaryActive)) {
         let svgText = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
   <rect width="100%" height="100%" fill="white"/>
   <style>
-    .brat {
-      font-family: Arial, Helvetica, sans-serif;
-      fill: black;
-      font-size: ${fontSize}px;
-    }
-  </style>\n`;
+  .brat {
+    font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', Arial, Helvetica, sans-serif;
+    fill: black;
+    font-size: ${fontSize}px;
+  }
+</style>\n`;
 
         for (const line of lines) {
             let x = 30;
@@ -2849,129 +2897,6 @@ console.log("isOwner:", isOwner(sender));
 }
 
 
-const angkaToEmoji = {
-    '1': '✌️',
-    '2': '✊',
-    '3': '✋'
-};
-
-if (text.startsWith('.suit')) {
-    const sender = msg.key.participant || msg.key.remoteJid;
-
-    if (!from.endsWith('@g.us')) {
-        await safeSend(from, { text: '❌ Hanya bisa digunakan di grup.' });
-        return;
-    }
-
-    if (cooldownSuit.has(sender)) {
-        await safeSend(from, { text: '⏳ Tunggu 30 detik sebelum main suit lagi!' });
-        return;
-    }
-
-    if (suitGame.has(from)) {
-        await safeSend(from, { text: '⚠️ Masih ada game suit yang aktif di grup ini!' });
-        return;
-    }
-
-    const quoted = msg.message?.extendedTextMessage?.contextInfo;
-    const mentioned = quoted?.mentionedJid?.[0];
-
-    if (!mentioned || mentioned === sender) {
-        await safeSend(from, {
-            text: '❗ Tag lawan main kamu!\nContoh: *.suit @user*',
-        });
-        return;
-    }
-
-    suitGame.set(from, {
-        pemain1: sender,
-        pemain2: mentioned,
-        pilihan: {},
-        timeout: setTimeout(() => {
-            suitGame.delete(from);
-            safeSend(from, { text: '⏰ Waktu habis, suit dibatalkan!' });
-        }, 60000)
-    });
-
-    await safeSend(from, {
-        text: `🎮 *SUIT DIMULAI!*\n\n@${sender.split('@')[0]} vs @${mentioned.split('@')[0]}\n\nSilakan kirim angka berikut ke chat bot (chat pribadi):\n\n1 = ✌️ Gunting\n2 = ✊ Batu\n3 = ✋ Kertas\n\n⏳ Waktu 1 menit!`,
-        mentions: [sender, mentioned]
-    });
-
-    cooldownSuit.add(sender);
-    setTimeout(() => cooldownSuit.delete(sender), 30_000); // 30 detik cooldown
-}
-
-if (!text.startsWith('.') && ['1', '2', '3'].includes(text.trim()) && !msg.key.remoteJid.endsWith('@g.us')) {
-    const sender = msg.key.remoteJid;
-    const angka = text.trim();
-    const pilihan = angkaToEmoji[angka];
-
-    let grupKey = null;
-    for (const [grup, game] of suitGame.entries()) {
-        if (game.pemain1 === sender || game.pemain2 === sender) {
-            grupKey = grup;
-            break;
-        }
-    }
-
-    if (!grupKey) {
-        await safeSend(sender, { text: '⚠️ Kamu tidak sedang ikut game suit.' });
-        return;
-    }
-
-    const game = suitGame.get(grupKey);
-    if (game.pilihan[sender]) {
-        await safeSend(sender, { text: '❗ Kamu sudah memilih!' });
-        return;
-    }
-
-    game.pilihan[sender] = pilihan;
-    await safeSend(sender, { text: `✅ Pilihan kamu tercatat: *${pilihan}*` });
-
-    if (game.pilihan[game.pemain1] && game.pilihan[game.pemain2]) {
-        clearTimeout(game.timeout);
-
-        const p1 = game.pilihan[game.pemain1];
-        const p2 = game.pilihan[game.pemain2];
-        const hasil = getPemenang(p1, p2);
-
-        let teksHasil = `🎮 *HASIL SUIT!*\n\n`;
-        teksHasil += `👤 @${game.pemain1.split('@')[0]} memilih: ${p1}\n`;
-        teksHasil += `👤 @${game.pemain2.split('@')[0]} memilih: ${p2}\n\n`;
-
-        if (hasil === 'seri') {
-            teksHasil += '🤝 Hasil: *Seri!*';
-        } else {
-            const pemenang = hasil === 'p1' ? game.pemain1 : game.pemain2;
-            const kalah = hasil === 'p1' ? game.pemain2 : game.pemain1;
-
-            const skorMenang = (skorUser.get(pemenang) || 0) + 50;
-            const skorKalah = Math.max((skorUser.get(kalah) || 0) - 50, 0);
-
-            skorUser.set(pemenang, skorMenang);
-            skorUser.set(kalah, skorKalah);
-            simpanSkorKeFile();
-
-            teksHasil += `🏆 Pemenang: @${pemenang.split('@')[0]} (+50 poin)\n`;
-            teksHasil += `😢 Kalah: @${kalah.split('@')[0]} (-50 poin)`;
-        }
-
-        await safeSend(grupKey, {
-            text: teksHasil,
-            mentions: [game.pemain1, game.pemain2]
-        });
-
-        suitGame.delete(grupKey);
-    }
-}
-
-function getPemenang(p1, p2) {
-    if (p1 === p2) return 'seri';
-    if ((p1 === '✊' && p2 === '✌️') || (p1 === '✋' && p2 === '✊') || (p1 === '✌️' && p2 === '✋')) return 'p1';
-    return 'p2';
-}
-
 
 if (text.startsWith('.gay')) {
     const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
@@ -3121,6 +3046,75 @@ ${komentar}
         mentions: [user1, user2]
     }, { quoted: msg });
 }
+
+if (text.startsWith('.cekkhodam')) {
+     const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+    const sender = msg.key.participant || msg.key.remoteJid;
+    const target = mentioned || sender;
+    const nama = target.split('@')[0];
+
+    const khodams = [
+        { name: "Macan Putih", emoji: "🐅", desc: "Penjaga kuat dan pemberani.", pesan: "Berjalanlah dengan keyakinan." },
+        { name: "Naga Emas", emoji: "🐉", desc: "Pembawa keberuntungan dan kebijaksanaan.", pesan: "Kebijaksanaan adalah kunci." },
+        { name: "Burung Garuda", emoji: "🦅", desc: "Simbol kebebasan dan kekuatan.", pesan: "Terbanglah tinggi dan bebas." },
+        { name: "Harimau Merah", emoji: "🐯", desc: "Penuh semangat dan keberanian.", pesan: "Jadilah pemberani sejati." },
+        { name: "Kelinci Putih", emoji: "🐇", desc: "Cerdas dan penuh kelincahan.", pesan: "Kelincahan membawa kemenangan." },
+        { name: "Jalak Bali", emoji: "🦜", desc: "Penuh keceriaan dan suara merdu.", pesan: "Bersuara lantang, jadi perhatian." },
+        { name: "Kuda Liar", emoji: "🐎", desc: "Semangat bebas dan liar.", pesan: "Jangan terikat, terus maju." },
+        { name: "Ular Hijau", emoji: "🐍", desc: "Lincah dan penuh misteri.", pesan: "Jangan takut dengan perubahan." },
+        { name: "Singa Laut", emoji: "🦭", desc: "Berani di laut dan badai.", pesan: "Hadapi gelombang hidup." },
+        { name: "Rajawali Hitam", emoji: "🦅", desc: "Penguasa langit malam.", pesan: "Tajam dan penuh fokus." },
+        { name: "Kodok Emas", emoji: "🐸", desc: "Pembawa keberuntungan dan rejeki.", pesan: "Rejeki datang dari mana saja." },
+        { name: "Serigala Malam", emoji: "🐺", desc: "Setia dan penuh insting.", pesan: "Percaya pada naluri." },
+        { name: "Elang Gunung", emoji: "🦅", desc: "Penguasa puncak dan awan.", pesan: "Tinggi dan tak terjangkau." },
+        { name: "Buaya Rawa", emoji: "🐊", desc: "Tangguh dan penuh kewaspadaan.", pesan: "Waspadai segala bahaya." },
+        { name: "Macan Kumbang", emoji: "🐆", desc: "Pemberani dan lihai berburu.", pesan: "Jadilah pemburu yang cerdas." },
+        { name: "Tupai Ceria", emoji: "🐿️", desc: "Lincah dan selalu waspada.", pesan: "Jangan lengah sedikit pun." },
+        { name: "Jalak Putih", emoji: "🦜", desc: "Simbol kemurnian dan suara indah.", pesan: "Jaga hati dan suara." },
+        { name: "Kuda Nil", emoji: "🦛", desc: "Kuat dan tahan banting.", pesan: "Kuatkan mentalmu selalu." },
+        { name: "Gajah Raja", emoji: "🐘", desc: "Bijaksana dan kuat.", pesan: "Bijaksanalah dalam keputusan." },
+        { name: "Kakatua muda", emoji: "🦜", desc: "Ceria dan penuh warna.", pesan: "Warnai hari-harimu." },
+        { name: "Angsa Putih", emoji: "🦢", desc: "Anggun dan penuh kasih.", pesan: "Jadilah pribadi yang lembut." },
+        { name: "Lumba-Lumba Pintar", emoji: "🐬", desc: "Cerdas dan bersahabat.", pesan: "Kebersamaan adalah kekuatan." },
+        { name: "Rajawali Merah", emoji: "🦅", desc: "Penuh semangat dan fokus.", pesan: "Kejar semua impianmu." },
+        { name: "Bebek Emas", emoji: "🦆", desc: "Pembawa keberuntungan kecil.", pesan: "Keberuntungan kecil berharga." },
+        { name: "Burung Merak", emoji: "🦚", desc: "Indah dan percaya diri.", pesan: "Percaya pada dirimu sendiri." },
+        { name: "Kupu-Kupu Malam", emoji: "🦋", desc: "Misterius dan memesona.", pesan: "Terimalah sisi gelapmu." },
+        { name: "Cicak Pemberani", emoji: "🦎", desc: "Kecil tapi pemberani.", pesan: "Ukuran bukan halangan." },
+        { name: "Tawon Rajawali", emoji: "🐝", desc: "Kerja keras dan fokus.", pesan: "Kerja keras membuahkan hasil." },
+        { name: "Ikan Koi", emoji: "🐟", desc: "Sabar dan beruntung.", pesan: "Kesabaran membawa keberuntungan." },
+        { name: "Kalajengking ngising", emoji: "🦂", desc: "Berbahaya tapi setia.", pesan: "Jaga diri dengan baik." },
+        { name: "Kucing Hitam", emoji: "🐈‍⬛", desc: "Misterius dan penuh pesona.", pesan: "Jangan takut pada misteri." },
+        { name: "Merpati Putih", emoji: "🕊️", desc: "Simbol damai dan cinta.", pesan: "Sebarkan cinta dan damai." },
+        { name: "Bebek Angsa", emoji: "🦢", desc: "Elegan dan kuat.", pesan: "Jadilah pribadi elegan." },
+        { name: "Ikan Arwana", emoji: "🐠", desc: "Pembawa rejeki dan kemakmuran.", pesan: "Rejeki datang tanpa diduga." },
+        { name: "Burung Hantu", emoji: "🦉", desc: "Bijaksana dan waspada.", pesan: "Jadilah bijak dalam keputusan." },
+        { name: "Kadal Hijau", emoji: "🦎", desc: "Lincah dan adaptif.", pesan: "Beradaptasilah dengan cepat." },
+        { name: "Cicak Emas", emoji: "🦎", desc: "Langka dan membawa keberuntungan.", pesan: "Keberuntungan ada di tanganmu." },
+        { name: "Ikan Lele", emoji: "🐟", desc: "Penuh semangat dan tahan banting.", pesan: "Jangan mudah menyerah." },
+        { name: "Babi Hutan", emoji: "🐗", desc: "Kuat dan berani.", pesan: "Berani hadapi tantangan." },
+        { name: "Tikus kantor", emoji: "🐭", desc: "Selalu cari uang.", pesan: "Korupsi terus!" },
+      
+    ];
+
+    const khodam = khodams[Math.floor(Math.random() * khodams.length)];
+
+    const teks = `╭─🔮 *CEK KHODAM* 🔮─╮
+│
+│ 👤 @${nama}
+│
+│ ${khodam.emoji} *${khodam.name}*
+│ ${khodam.desc}
+│
+│ 💬 _"${khodam.pesan}"_
+╰─────────────────╯`;
+
+   await sock.sendMessage(from, {
+        text: teks,
+        mentions: [target]
+    });
+}
+
 
 if (body === '.truth') {
   const truthText = ambilSoalAcak('truth', truthList);
@@ -3682,7 +3676,7 @@ if (text.trim() === '.menu') {
         '5': '𝟓', '6': '𝟔', '7': '𝟕', '8': '𝟖', '9': '𝟗'
     }[d]));
 
-    const versiFancy = toFancyNumber('1.0.0');
+    const versiFancy = toFancyNumber('1.0.1');
     const tanggalFancy = `${toFancyNumber(tanggal)}-${toFancyNumber(bulan)}-${toFancyNumber(tahun)}`;
    
 
@@ -3703,7 +3697,6 @@ ${readmore}╭─〔 *🤖 ʙᴏᴛ ᴊᴀʀʀ ᴍᴇɴᴜ* 〕─╮
 ├─ 〔 🎮 *ɢᴀᴍᴇ* 〕
 │ .kuis → Kuis pilihan ganda
 │ .kuissusah → Kuis versi susah 
-│ .suit → Main suit lawan teman
 │ .judi → Tebak ganjil / genap
 │ .truth → Jawab jujur
 │ .dare → Lakukan tantangan
@@ -3717,13 +3710,15 @@ ${readmore}╭─〔 *🤖 ʙᴏᴛ ᴊᴀʀʀ ᴍᴇɴᴜ* 〕─╮
 │ .cantik @user → Seberapa cantik?
 │ .ganteng @user → Seberapa ganteng?
 │ .jodoh @user @user → Cocoklogi cinta
+│ .cekkhodam @user → Cek khodam 
 │
 ├─ 〔 🧠 *ᴀɪ ᴀꜱꜱɪꜱᴛᴀɴᴛ* 〕
-│ .ai <pertanyaan → Tanya ke AI
+│ .ai <pertanyaan> → Tanya ke AI
 │
 ├─ 〔 🖼️ *ᴍᴇᴅɪᴀ* 〕
 │ .pdf → Ubah gambar jadi pdf
 │ .stiker → Ubah gambar jadi stiker
+│ .toimg → Ubah stiker jadi gambar
 │ .teks → Beri teks di stiker
 │ .brat → Membuat stiker kata
 │ .dwfoto → Unduh foto sekali lihat
