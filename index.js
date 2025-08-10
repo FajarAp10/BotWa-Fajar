@@ -2893,8 +2893,12 @@ if (text === '.dwfoto') {
         });
         return;
     }
-
-    await sock.sendMessage(from, { text: '⏳ Mohon tunggu sebentar, sedang mengambil foto...' });
+        await sock.sendMessage(from, {
+            react: {
+                text: '⏳',
+                key: msg.key
+            }
+        });
 
     try {
         const mediaBuffer = await downloadMediaMessage(
@@ -2909,6 +2913,11 @@ if (text === '.dwfoto') {
             caption: '📸 Foto sekali lihat berhasil di ambil.',
             mentions: [sender]
         });
+
+         await sock.sendMessage(from, {
+        react: { text: '✅', key: msg.key }
+        });
+
     } catch (err) {
         console.error('❌ Gagal mengunduh foto sekali lihat:', err);
         await sock.sendMessage(from, {
@@ -2934,8 +2943,12 @@ if (text === '.dwvideo') {
         return;
     }
 
-    // Kirim info loading dulu
-    await sock.sendMessage(from, { text: '⏳ Mohon tunggu sebentar, sedang mengambil video...' });
+      await sock.sendMessage(from, {
+            react: {
+                text: '⏳',
+                key: msg.key
+            }
+        });
 
     try {
         const mediaBuffer = await downloadMediaMessage(
@@ -2950,6 +2963,11 @@ if (text === '.dwvideo') {
             caption: '📸 Video sekali lihat berhasil di ambil.',
             mentions: [sender]
         });
+
+         await sock.sendMessage(from, {
+        react: { text: '✅', key: msg.key }
+        });
+        
     } catch (err) {
         console.error('❌ Gagal mengambil video sekali lihat:', err);
         await sock.sendMessage(from, {
