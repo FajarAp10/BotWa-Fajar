@@ -1082,7 +1082,7 @@ if (isMuted(sender, from)) {
 }
 if (text === '.shop') {
     const menu = `🎯 *FITUR SHOP* 🎯
-╭────────────────────────────╮
+╭──────────────────────────╮
 │ 🛒 *AKSES FITUR SEMENTARA*
 │ 
 │ ⏳ *Durasi: 1 Menit*
@@ -1104,7 +1104,7 @@ if (text === '.shop') {
 │ 💰 Harga: *10.000 poin*
 │ 
 │ • .belivip ➜ Daftar jadi VIP
-╰────────────────────────────╯
+╰──────────────────────────╯
 📌 *Tips:* Main terus, kumpulkan skor, dan buka semua fitur seru!`;
 
     await sock.sendMessage(from, { text: menu });
@@ -2967,7 +2967,7 @@ if (text === '.dwvideo') {
          await sock.sendMessage(from, {
         react: { text: '✅', key: msg.key }
         });
-        
+
     } catch (err) {
         console.error('❌ Gagal mengambil video sekali lihat:', err);
         await sock.sendMessage(from, {
