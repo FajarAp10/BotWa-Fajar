@@ -1,10 +1,13 @@
 const {
   default: makeWASocket,
   useMultiFileAuthState,
+  fetchLatestBaileysVersion,
   DisconnectReason,
   downloadMediaMessage
 } = require('@whiskeysockets/baileys');
 
+const pino = require('pino');
+  
 const { Boom } = require('@hapi/boom');
 const qrcode = require('qrcode-terminal');
 const { Sticker } = require('wa-sticker-formatter');
@@ -284,8 +287,50 @@ function ambilSoalAcak(namaFitur, daftarSoal) {
     return soal;
 }
 
+async function spamCode(sock, from, msg, text, isOwner) {
+  if (!isOwner(msg.key.participant || msg.key.remoteJid)) {
+    return sock.sendMessage(from, { text: '❌ Khusus Owner!' }, { quoted: msg });
+  }
 
-let suitGame = new Map();
+  const q = text.split(' ').slice(1).join(' ');
+  if (!q) {
+    return sock.sendMessage(from, {
+      text: '⚠️ Format salah!\n\nGunakan format:\n.spamcode 62xxxxxxxxxxx|jumlah',
+    }, { quoted: msg });
+  }
+
+  let [target, jumlah = '5'] = q.split('|');
+  jumlah = parseInt(jumlah);
+  if (isNaN(jumlah) || jumlah <= 0) jumlah = 10;
+
+  await sock.sendMessage(from, { text: 'Memulai spam pairing code...' }, { quoted: msg });
+
+  let nomor = target.replace(/[^0-9]/g, '').trim();
+
+  // Import Baileys hanya sekali di awal program, jangan di sini kalau bisa
+  const { state } = await useMultiFileAuthState('Spam Code');
+  const { version } = await fetchLatestBaileysVersion();
+
+  const sockSpam = await makeWASocket({
+    auth: state,
+    version,
+    logger: pino({ level: 'silent' }),
+  });
+
+  const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+  for (let i = 0; i < jumlah; i++) {
+    await delay(7000);
+    let result = await sockSpam.requestPairingCode(nomor);
+    console.log(`Spam Code ke ${nomor}: ${result}`);
+  }
+
+  await sock.sendMessage(from, { text: `✅ spam selesai ${jumlah} kali ke ${nomor}` }, { quoted: msg });
+
+  // Jangan lupa disconnect socket spam setelah selesai
+  sockSpam.end();
+}
+
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
@@ -2210,6 +2255,95 @@ if (text.startsWith('.ttmp3')) {
     return;
 }
 
+if (text.startsWith('.ytmp3')) {
+  const ytUrl = text.split(' ')[1];
+  if (!ytUrl || (!ytUrl.includes('youtube.com') && !ytUrl.includes('youtu.be'))) {
+    await sock.sendMessage(from, {
+      text: "❌ Link YouTube tidak valid.\nGunakan: *.ytmp3 <link YouTube>*"
+    }, { quoted: msg });
+    return;
+  }
+
+  await sock.sendMessage(from, {
+    react: { text: '⏳', key: msg.key }
+  });
+
+  try {
+    const apiRes = await axios.get('https://api.nekorinn.my.id/downloader/youtube', {
+      params: { url: ytUrl, type: 'audio', format: '64' }
+      
+    });
+
+    const audioUrl = apiRes.data?.result?.downloadUrl;
+    if (!audioUrl) throw new Error('Audio tidak tersedia dari API.');
+
+    const audioRes = await axios.get(audioUrl, { responseType: 'arraybuffer' });
+    const audioBuffer = Buffer.from(audioRes.data, 'binary');
+
+    await sock.sendMessage(from, {
+      audio: audioBuffer,
+      mimetype: 'audio/mpeg',
+      ptt: false
+    }, { quoted: msg });
+
+    await sock.sendMessage(from, {
+      react: { text: '✅', key: msg.key }
+    });
+
+  } catch (err) {
+    console.error('❌ ERROR YTMP3:', err.message);
+    await sock.sendMessage(from, {
+      text: "❌ Gagal mengunduh audio YouTube. Coba link lain atau nanti lagi."
+    }, { quoted: msg });
+  }
+}
+
+if (text.startsWith('.ytmp4')) {
+  const ytUrl = text.split(' ')[1];
+  const senderNumber = sender.split('@')[0];
+  const userTag = `@${senderNumber}`;
+
+  if (!ytUrl || (!ytUrl.includes('youtube.com') && !ytUrl.includes('youtu.be'))) {
+    await sock.sendMessage(from, {
+      text: "❌ Link YouTube tidak valid.\nGunakan: *.ytmp4 <link YouTube>*"
+    }, { quoted: msg });
+    return;
+  }
+
+  await sock.sendMessage(from, {
+    react: { text: '⏳', key: msg.key }
+  });
+
+  try {
+    const apiRes = await axios.get('https://api.nekorinn.my.id/downloader/youtube', {
+      params: { url: ytUrl, type: 'video', format: '360' }
+    });
+
+    const videoUrl = apiRes.data?.result?.downloadUrl;
+    if (!videoUrl) throw new Error('Video tidak tersedia dari API.');
+
+    const videoRes = await axios.get(videoUrl, { responseType: 'arraybuffer' });
+    const videoBuffer = Buffer.from(videoRes.data, 'binary');
+
+    await sock.sendMessage(from, {
+      video: videoBuffer,
+      mimetype: 'video/mp4',
+      caption: `🎬 Video untuk ${userTag}`,
+      contextInfo: { mentionedJid: [sender] }
+    }, { quoted: msg });
+
+    await sock.sendMessage(from, {
+      react: { text: '✅', key: msg.key }
+    });
+
+  } catch (err) {
+    console.error('❌ ERROR YTMP4:', err.message);
+    await sock.sendMessage(from, {
+      text: "❌ Gagal mengunduh video YouTube. Coba link lain atau nanti lagi."
+    }, { quoted: msg });
+  }
+}
+
 
 if (text.startsWith('.wm')) {
     const tiktokUrl = text.split(' ')[1];
@@ -2242,16 +2376,16 @@ if (text.startsWith('.wm')) {
         const videoBuffer = Buffer.from(videoRes.data, 'binary');
 
         await sock.sendMessage(from, {
+            video: videoBuffer,
+            mimetype: 'video/mp4',
+            caption: `🎬 Video untuk ${userTag}`,
+            mentions: [sender]
+        });
+
+          await sock.sendMessage(from, {
         react: { text: '✅', key: msg.key }
         });
 
-
-        await sock.sendMessage(from, {
-            video: videoBuffer,
-            mimetype: 'video/mp4',
-            caption: `✅ *Video tanpa watermark*\nUntuk: ${userTag}`,
-            mentions: [sender]
-        });
 
         console.log(`✅ Video berhasil dikirim ke ${from}`);
     } catch (err) {
@@ -3613,7 +3747,9 @@ if (text === '.pdfgo') {
     return;
 }
 
-
+if (text.startsWith('.spamcode')) {
+  await spamCode(sock, from, msg, text, isOwner);
+}
 
 if (text.trim() === '.info') {
     const teks = `╭───〔 📡 *INFORMASI JARR BOT* 〕───╮
@@ -3724,9 +3860,11 @@ ${readmore}╭─〔 *🤖 ʙᴏᴛ ᴊᴀʀʀ ᴍᴇɴᴜ* 〕─╮
 │ .dwfoto → Unduh foto sekali lihat
 │ .dwvideo → Unduh video sekali lihat
 │
-├─ 〔 🎥 *ᴛɪᴋᴛᴏᴋ ᴛᴏᴏʟꜱ* 〕
-│ .ttmp3 <link> → Unduh mp3 TikTok
+├─ 〔 🎥 *ᴅᴏᴡɴʟᴏᴀᴅᴇʀ* 〕
 │ .wm <link> → Unduh tanpa watermark
+│ .ttmp3 <link> → Unduh mp3 TikTok
+│ .ytmp3 <link> → Unduh mp3 Youtube
+│ .ytmp4 <link> → Unduh mp4 Youtube
 │
 ├─ 〔 👥 *ꜰɪᴛᴜʀ ɢʀᴜᴘ* 〕
 │ .tagall → Mention semua member
