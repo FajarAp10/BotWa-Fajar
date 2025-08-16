@@ -100,7 +100,9 @@ function addVIP(jid, groupId) {
 }
 
 function saveVIP() {
-    fs.writeFileSync(vipPath, JSON.stringify(vipList, null, 2));
+    fs.writeFile(vipPath, JSON.stringify(vipList, null, 2), err => {
+        if (err) console.error("❌ Gagal simpan VIP:", err);
+    });
 }
 
 
@@ -116,7 +118,9 @@ try {
 
 
 function saveFiturSementara() {
-    fs.writeFileSync(fiturSementaraPath, JSON.stringify(fiturSementara, null, 2));
+    fs.writeFile(fiturSementaraPath, JSON.stringify(fiturSementara, null, 2), err => {
+        if (err) console.error("❌ Gagal simpan fitur sementara:", err);
+    });
 }
 
 function addTemporaryFeature(jid, fitur, groupId) {
@@ -186,7 +190,9 @@ try {
 }
 
 function simpanMuted() {
-    fs.writeFileSync('./muted.json', JSON.stringify(mutedUsers, null, 2));
+    fs.writeFile('./muted.json', JSON.stringify(mutedUsers, null, 2), err => {
+        if (err) console.error("❌ Gagal simpan muted:", err);
+    });
 }
 
 function isMuted(userId, groupId) {
@@ -211,7 +217,9 @@ function unmuteUser(userId, groupId) {
 const grupPath = './grupAktif.json';
 
 function simpanGrupAktif() {
-    fs.writeFileSync(grupPath, JSON.stringify(Object.fromEntries(grupAktif), null, 2));
+    fs.writeFile(grupPath, JSON.stringify(Object.fromEntries(grupAktif), null, 2), err => {
+        if (err) console.error("❌ Gagal simpan grup:", err);
+    });
 }
 
 let grupAktif = new Map();
@@ -226,7 +234,9 @@ const skorPath = './skor.json';
 let skorUser = {}; 
 
 function simpanSkorKeFile() {
-    fs.writeFileSync(skorPath, JSON.stringify(skorUser, null, 2));
+    fs.writeFile(skorPath, JSON.stringify(skorUser, null, 2), err => {
+        if (err) console.error("❌ Gagal simpan skor:", err);
+    });
 }
 
 
@@ -252,19 +262,6 @@ function addGroupSkor(jid, roomId, poin) {
     simpanSkorKeFile();
 }
 
-const antiSpamPath = './antispam.json';
-
-let antiSpamStatus = {}; 
-
-try {
-    antiSpamStatus = JSON.parse(fs.readFileSync(antiSpamPath));
-} catch {
-    antiSpamStatus = {};
-}
-
-function simpanAntiSpam() {
-    fs.writeFileSync(antiSpamPath, JSON.stringify(antiSpamStatus, null, 2));
-}
 
 
 
@@ -963,12 +960,14 @@ async function safeSend(jid, content, options = {}) {
 sock.ev.on('messages.upsert', async ({ messages }) => {
     const msg = messages[0];
     if (!msg.message) return;
+    if (msg.key.fromMe) return;
 
     const from = msg.key.remoteJid; // ID room: grup atau pribadi
     const isGroup = from.endsWith('@g.us');
 
     // Cari ID pengirim sebenarnya
     let rawSender = null;
+    
 
     if (isGroup) {
         rawSender = msg.key.participant || msg.participant;
@@ -2451,7 +2450,7 @@ if (text.trim().toLowerCase() === '.stiker') {
 
         const sticker = new Sticker(resizedBuffer, {
             type: 'FULL',
-            pack: 'StikerBot',
+            pack: 'stikerbot',
             author: 'JarrAI',
             quality: 100
         });
@@ -2629,7 +2628,7 @@ if (text.toLowerCase().startsWith('.teks')) {
 
         const sticker = new Sticker(bufferWithText, {
             type: 'FULL',
-            pack: 'StikerBot',
+            pack: 'stikerbot',
             author: 'JarrAI',
             quality: 100
         });
@@ -3799,6 +3798,12 @@ if (text.trim() === '.info') {
 }
 
 if (text.trim() === '.menu') {
+    await sock.sendMessage(from, {
+            react: {
+                text: '⏳',
+                key: msg.key
+            }
+        });
     const waktu = new Date();
 
     // Ambil nilai numerik
@@ -3925,6 +3930,8 @@ ${readmore}╭─〔 *🤖 ʙᴏᴛ ᴊᴀʀʀ ᴍᴇɴᴜ* 〕─╮
 │
 ╰── 👑 Owner: @${OWNER_NUMBER?.split('@')[0] || '6283836348226'}`,
   mentions: [OWNER_NUMBER]
+
+  
 });
 return;
 
