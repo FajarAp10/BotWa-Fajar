@@ -3810,7 +3810,7 @@ if (text === '.pdfgo') {
     return;
 }
 
-if (text.toLowerCase().startsWith(".waifu")) {
+if (text.toLowerCase() === ".waifu" || text.toLowerCase().startsWith(".waifu ")) {
   try {
     // kasih reaction ⏳ dulu
     await sock.sendMessage(from, { react: { text: "⏳", key: msg.key } });
@@ -3860,7 +3860,7 @@ if (text.toLowerCase().startsWith(".waifu")) {
   }
 }
 
-if (text.toLowerCase().startsWith(".waifux")) {
+if (text.toLowerCase() === ".waifux" || text.toLowerCase().startsWith(".waifux ")) {
   try {
     // 🚫 Hanya bisa dipakai oleh VIP / OWNER
     if (!isVIP(sender, from) && sender !== OWNER_NUMBER) {
