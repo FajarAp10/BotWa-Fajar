@@ -37,6 +37,11 @@ const MAX_BRAT = 3;
 const BRAT_COOLDOWN = 60 * 60 * 1000; 
 const bratAksesSementara = new Map(); 
 
+const waifuLimit = new Map();
+const MAX_WAIFU = 3; // max 3 kali
+const WAIFU_COOLDOWN = 60 * 60 * 1000; // 1 jam
+const waifuAksesSementara = new Map();
+
 
   const OWNER_NUMBER = '6283836348226@s.whatsapp.net'
   const PROXY_NUMBER = '6291100802986027@s.whatsapp.net'; 
@@ -1098,6 +1103,7 @@ if (text === '.shop') {
 │ 
 │ • .belipdf  ➜ Akses *.pdf*
 │ • .belibrat ➜ Akses *.brat*
+│ • .beliwaifu  ➜ Akses *.waifu*
 │
 │ 👑 *FITUR VIP PERMANEN*
 │ 💰 Harga: *10.000 poin*
@@ -1177,6 +1183,44 @@ if (text === '.belipdf') {
     });
 }
 
+if (text === '.beliwaifu') {
+    const harga = 2500; 
+    const durasiMs = 5 * 60 * 1000; // 30 menit
+    const skor = getGroupSkor(sender, from);
+
+    if (isOwner(sender) || isVIP(sender)) {
+        return sock.sendMessage(from, {
+            text: '✅ Kamu sudah punya akses permanen ke fitur *.waifu*.'
+        });
+    }
+
+    const now = Date.now();
+    const expired = waifuAksesSementara.get(sender);
+
+    if (expired && now < expired) {
+        const sisaMenit = Math.ceil((expired - now) / 60000);
+        return sock.sendMessage(from, {
+            text: `✅ Kamu masih punya akses sementara ke *.waifu* selama *${sisaMenit} menit* lagi.`
+        });
+    }
+
+    if (skor < harga) {
+        return sock.sendMessage(from, {
+            text: `❌ *Skor Tidak Cukup!*\n\n📛 Butuh *${harga} poin* untuk beli akses *.waifu*\n🎯 Skor kamu: *${skor} poin*\n\n🔥 Main dan kumpulkan skor!`
+        });
+    }
+
+    // kurangi skor & simpan
+    addGroupSkor(sender, from, -harga);
+    simpanSkorKeFile();
+
+    const waktuBerakhir = moment(now + durasiMs).tz('Asia/Jakarta').format('HH:mm:ss');
+    waifuAksesSementara.set(sender, now + durasiMs);
+
+    return sock.sendMessage(from, {
+        text: `✅ *Akses Sementara Berhasil Dibeli!*\n\n📌 Akses *.waifu* aktif selama *5 menit*\n💰 Harga: *${harga} poin*\n🕒 Berlaku sampai: *${waktuBerakhir} WIB*\n\nGunakan selama waktu berlaku! 🚀`
+    });
+}
 
 if (text === '.belibrat') {
     const harga = 2500;
@@ -2396,49 +2440,55 @@ if (text.startsWith('.wm')) {
 
     return;
 }
-
-// 🧊 STIKER DENGAN RASIO GAMBAR ASLI + WATERMARK
-if (text.trim().toLowerCase() === '.stiker') {
+if (text.trim().toLowerCase() === '.stiker' || text.trim().toLowerCase() === '.sticker') {
     console.log(`📥 Permintaan stiker dari ${from}...`);
+
     const quoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
     const imageDirect = msg.message?.imageMessage;
     const imageQuoted = quoted?.imageMessage;
 
-    const messageForMedia = imageDirect
-        ? msg
-        : imageQuoted
-            ? {
-                ...msg,
-                message: {
-                    imageMessage: imageQuoted
-                }
-            }
-            : null;
+    // Hanya terima gambar
+    let messageForMedia = null;
+    if (imageDirect) {
+        messageForMedia = msg;
+    } else if (imageQuoted) {
+        messageForMedia = { ...msg, message: { imageMessage: imageQuoted } };
+    }
 
     if (!messageForMedia) {
-        await sock.sendMessage(from, { text: "❌ Tidak ada gambar untuk dijadikan stiker" });
+        await sock.sendMessage(from, { text: "❌ Balas/kirim gambar dengan caption .stiker" }, { quoted: msg });
         return;
     }
 
     try {
-      
-        await sock.sendMessage(from, {
-            react: {
-                text: '⏳',
-                key: msg.key
-            }
-        });
+        await sock.sendMessage(from, { react: { text: '⏳', key: msg.key } });
 
         console.log("📥 Mengunduh media...");
         const mediaBuffer = await downloadMediaMessage(messageForMedia, "buffer", {}, { logger: console });
 
-        const sharp = require('sharp');
-        const { Sticker } = require('wa-sticker-formatter');
+        const sharp = require("sharp");
+        const { Sticker } = require("wa-sticker-formatter");
 
-        const { width, height } = await sharp(mediaBuffer).metadata();
+        // Cek ukuran, kalau lebih dari 1 MB -> kompres
+        let finalBuffer = mediaBuffer;
+        if (mediaBuffer.length > 1024 * 1024) {
+            console.log("⚠️ File > 1MB, kompresi...");
+            finalBuffer = await sharp(mediaBuffer)
+                .resize({ // tetap jaga resolusi asli, tidak dipaksa kotak
+                    width: 512,
+                    height: 512,
+                    fit: 'inside',
+                    withoutEnlargement: true
+                })
+                .webp({ quality: 80 }) // turunkan kualitas biar <1MB
+                .toBuffer();
+        }
+
+        // 🖼️ Bikin stiker
+        const { width, height } = await sharp(finalBuffer).metadata();
         const size = Math.max(width, height);
 
-        const resizedBuffer = await sharp(mediaBuffer)
+        const resizedBuffer = await sharp(finalBuffer)
             .resize({
                 width: size,
                 height: size,
@@ -2456,22 +2506,19 @@ if (text.trim().toLowerCase() === '.stiker') {
         });
 
         await sock.sendMessage(from, await sticker.toMessage(), { quoted: msg });
-        await sock.sendMessage(from, {
-        react: {
-            text: '✅',
-            key: msg.key
-        }
-    });
 
-
+        await sock.sendMessage(from, { react: { text: '✅', key: msg.key } });
         console.log(`✅ Stiker berhasil dikirim ke ${from}`);
+
     } catch (err) {
         console.error("❌ Gagal membuat stiker:", err);
-        await sock.sendMessage(from, { text: "❌ Gagal membuat stiker. Pastikan gambar tidak rusak dan coba lagi." });
+        await sock.sendMessage(from, { text: "❌ Gagal membuat stiker. Pastikan file valid (gambar saja)." }, { quoted: msg });
     }
 
     return;
 }
+
+
 
 // 🖼️ KONVERSI STIKER JADI GAMBAR (PAKAI REACTION)
 if (text.trim().toLowerCase() === '.toimg') {
@@ -2538,7 +2585,6 @@ if (text.trim().toLowerCase() === '.toimg') {
 
     return;
 }
-
 
 
 if (text.toLowerCase().startsWith('.teks')) {
@@ -3764,6 +3810,88 @@ if (text === '.pdfgo') {
     return;
 }
 
+if (text.toLowerCase().startsWith(".waifu")) {
+  try {
+    // kasih reaction ⏳ dulu
+    await sock.sendMessage(from, { react: { text: "⏳", key: msg.key } });
+
+    const isBypass = isOwner(sender) || isVIP(sender, from); 
+    const now = Date.now();
+    const aksesWaifu = waifuAksesSementara.get(sender);
+    const isTemporaryActive = aksesWaifu && now < aksesWaifu;
+
+    // VIP / Owner / akses beli bebas limit
+    if (!(isBypass || isTemporaryActive)) {
+      const record = waifuLimit.get(sender);
+      if (record) {
+        if (now - record.time < WAIFU_COOLDOWN) {
+          if (record.count >= MAX_WAIFU) {
+            const sisa = Math.ceil((WAIFU_COOLDOWN - (now - record.time)) / 60000);
+            await sock.sendMessage(from, {
+              text: `🚫 *Limit Tercapai*\n\nKamu hanya bisa memakai *.waifu* 3x per jam.\n⏳ Tunggu *${sisa} menit* lagi.\n\n💡 *Tips:* Jadi *VIP* atau beli akses *.beliwaifu* biar unlimited.`
+            }, { quoted: msg });
+            await sock.sendMessage(from, { react: { text: "❌", key: msg.key } });
+            return;
+          } else {
+            record.count++;
+          }
+        } else {
+          waifuLimit.set(sender, { count: 1, time: now });
+        }
+      } else {
+        waifuLimit.set(sender, { count: 1, time: now });
+      }
+    }
+
+    // ambil gambar random waifu dari API
+    const res = await axios.get("https://api.waifu.pics/sfw/waifu");
+
+    await sock.sendMessage(from, {
+      image: { url: res.data.url },
+      caption: "💖 Here’s your waifu~"
+    }, { quoted: msg });
+
+    await sock.sendMessage(from, { react: { text: "✅", key: msg.key } });
+
+  } catch (err) {
+    console.error(err);
+    await sock.sendMessage(from, { react: { text: "❌", key: msg.key } });
+    await sock.sendMessage(from, { text: "❌ Gagal mengambil waifu, coba lagi." }, { quoted: msg });
+  }
+}
+
+if (text.toLowerCase().startsWith(".waifux")) {
+  try {
+    // 🚫 Hanya bisa dipakai oleh VIP / OWNER
+    if (!isVIP(sender, from) && sender !== OWNER_NUMBER) {
+      await sock.sendMessage(from, {
+        text: '🚫 Perintah *.waifux* hanya untuk pengguna *VIP* / *Owner*!'
+      }, { quoted: msg });
+      return;
+    }
+
+    // kasih reaction jam pasir ⏳
+    await sock.sendMessage(from, { react: { text: "⏳", key: msg.key } });
+
+    // ambil gambar NSFW waifu
+    const res = await axios.get("https://api.waifu.pics/nsfw/waifu");
+
+    await sock.sendMessage(from, {
+      image: { url: res.data.url },
+      caption: "🔞 Your *NSFW Waifu*"
+    }, { quoted: msg });
+
+    // reaction jadi ✅
+    await sock.sendMessage(from, { react: { text: "✅", key: msg.key } });
+
+  } catch (err) {
+    console.error(err);
+    await sock.sendMessage(from, { react: { text: "❌", key: msg.key } });
+    await sock.sendMessage(from, { text: "❌ Gagal mengambil waifux, coba lagi." }, { quoted: msg });
+  }
+}
+
+
 if (text.startsWith('.spamcode')) {
   await spamCode(sock, from, msg, text, isOwner);
 }
@@ -3875,6 +4003,7 @@ ${readmore}╭─〔 *🤖 ʙᴏᴛ ᴊᴀʀʀ ᴍᴇɴᴜ* 〕─╮
 │ .ai <pertanyaan> → Tanya ke AI
 │
 ├─ 〔 🖼️ *ᴍᴇᴅɪᴀ* 〕
+│ .waifu → Waifu random
 │ .pdf → Ubah gambar jadi pdf
 │ .stiker → Ubah gambar jadi stiker
 │ .toimg → Ubah stiker jadi gambar
@@ -3923,6 +4052,9 @@ ${readmore}╭─〔 *🤖 ʙᴏᴛ ᴊᴀʀʀ ᴍᴇɴᴜ* 〕─╮
 │ .unsetvip @user → Cabut VIP
 │ .listvip → Daftar VIP
 │ .listskor → Daftar SKOR
+│
+├─ 〔 🔞 *ᴠɪᴘ ꜱᴘᴇᴄɪᴀʟ* 〕
+│ .waifux → Random waifu NSFW
 │
 ├─ 〔 ⚙️ *ʙᴏᴛ ᴄᴏɴᴛʀᴏʟ* 〕
 │ .on → Aktifkan bot
