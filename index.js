@@ -1075,10 +1075,6 @@ function tambahSkor(jid, groupId, poin) {
 
 if (isMuted(sender, from)) {
     try {
-        await sock.sendMessage(from, {
-            text: '⚠️ Anda sedang dimute dan tidak bisa mengirim pesan.',
-            quoted: msg
-        });
         await sock.sendMessage(from, { delete: msg.key }); // hapus pesannya
     } catch (e) {
         console.log('Gagal hapus pesan dari user yang dimute.');
