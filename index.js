@@ -10,6 +10,7 @@ const pino = require('pino');
   
 const { Boom } = require('@hapi/boom');
 const qrcode = require('qrcode-terminal');
+const QRCode = require('qrcode'); 
 const { Sticker } = require('wa-sticker-formatter');
 const { exec } = require('child_process');
 const fs = require('fs');
@@ -21,6 +22,7 @@ const sharp = require('sharp');
 const mime = require('mime-types');
 const { PDFDocument } = require('pdf-lib');
 const pdfSessions = new Map(); 
+const antiLinkGroups = new Map();
 
 const pdfLimit = new Map(); 
 const MAX_PDF = 3;
@@ -1081,9 +1083,27 @@ if (isMuted(sender, from)) {
     }
     return;
 }
+
+// 🔗 Antilink aktif → hapus pesan yang ada link
+if (from.endsWith('@g.us') && antiLinkGroups.get(from)) {
+    if (text.includes('http://') || text.includes('https://')) {
+        try {
+            await sock.sendMessage(from, { delete: msg.key }); // hapus pesan link
+            await sock.sendMessage(from, {
+                text: `🚫 Link tidak diperbolehkan di grup ini @${sender.split('@')[0]}`,
+                mentions: [sender]
+            });
+            console.log(`🚫 Link dari ${sender} dihapus di grup ${from}`);
+        } catch (e) {
+            console.log('❌ Gagal hapus pesan link:', e.message);
+        }
+        return;
+    }
+}
+
 if (text === '.shop') {
     const menu = `🎯 *FITUR SHOP* 🎯
-╭──────────────────────────╮
+╭────────────────────────╮
 │ 🛒 *AKSES FITUR SEMENTARA*
 │ 
 │ ⏳ *Durasi: 1 Menit*
@@ -1106,7 +1126,7 @@ if (text === '.shop') {
 │ 💰 Harga: *10.000 poin*
 │ 
 │ • .belivip ➜ Daftar jadi VIP
-╰──────────────────────────╯
+╰────────────────────────╯
 📌 *Tips:* Main terus, kumpulkan skor, dan buka semua fitur seru!`;
 
     await sock.sendMessage(from, { text: menu });
@@ -3889,6 +3909,147 @@ if (text.toLowerCase() === ".waifux" || text.toLowerCase().startsWith(".waifux "
 }
 
 
+if (text.startsWith('.qr')) {
+    const query = text.split(' ')[1];
+    const userTag = `@${sender.split('@')[0]}`;
+
+    if (!query || (!query.startsWith("http://") && !query.startsWith("https://"))) {
+        await sock.sendMessage(from, {
+            text: "❌ Link tidak valid.\nGunakan: *.qr <link http/https>*"
+        });
+        return;
+    }
+
+    await sock.sendMessage(from, {
+        react: { text: '⏳', key: msg.key }
+    });
+
+    try {
+        const qrBuffer = await QRCode.toBuffer(query, { type: 'png' });
+
+        await sock.sendMessage(from, {
+            image: qrBuffer,
+            caption: `✅ QR berhasil dibuat oleh ${userTag}`,
+            mentions: [sender]
+        }, { quoted: msg });
+
+        await sock.sendMessage(from, {
+            react: { text: '✅', key: msg.key }
+        });
+
+        console.log(`✅ QR code berhasil dibuat oleh ${userTag} di ${from}`);
+    } catch (err) {
+        console.error('❌ ERROR QR:', err.message);
+        await sock.sendMessage(from, {
+            text: "❌ Gagal membuat QR. Coba lagi nanti."
+        });
+    }
+
+    return;
+}
+
+if (text.startsWith('.img')) {
+    const query = text.split(' ').slice(1).join(' ').trim();
+    const userTag = `@${sender.split('@')[0]}`; // ini buat teks biru
+
+    if (!query) {
+        await sock.sendMessage(from, { text: '⚠️ Format salah!\nGunakan: *.img <nama>*' });
+        return;
+    }
+
+    await sock.sendMessage(from, { react: { text: '⏳', key: msg.key } });
+
+    try {
+        const { data } = await axios.get(
+            `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=15`,
+            { headers: { Authorization: '8vG7tzljANRLQpo0xRYlN5SjiSWl1N2YqbzMWPPWBfSrY2dbahj9rT8S' } }
+        );
+
+        if (!data.photos || data.photos.length === 0) {
+            throw new Error("Tidak ada hasil.");
+        }
+
+        const photo = data.photos[Math.floor(Math.random() * data.photos.length)];
+
+        await sock.sendMessage(from, {
+            image: { url: photo.src.original },
+            caption: `✅ Hasil gambar *${query}*\n🔍 untuk ${userTag}`, 
+            mentions: [sender] // ⬅️ ini wajib biar jadi biru
+        }, { quoted: msg });
+
+        await sock.sendMessage(from, { react: { text: '✅', key: msg.key } });
+        console.log(`📷 IMG sukses: ${query} → ${photo.src.original}`);
+    } catch (err) {
+        console.error('❌ ERROR IMG:', err.message);
+        await sock.sendMessage(from, { text: '❌ Gagal ambil gambar. Coba lagi nanti.' });
+    }
+    return;
+}
+
+if (text.startsWith('.antilink')) {
+    if (!from.endsWith('@g.us')) {
+        await sock.sendMessage(from, { text: '❌ Perintah hanya bisa digunakan di grup.' });
+        return;
+    }
+
+    if (!isVIP(sender, from)) {
+        await sock.sendMessage(from, { text: '🔐 Perintah ini hanya bisa digunakan oleh VIP.' });
+        return;
+    }
+
+    const arg = text.split(' ')[1];
+    if (arg === 'on') {
+        antiLinkGroups.set(from, true);
+        await sock.sendMessage(from, { text: '✅ Antilink diaktifkan.' });
+    } else if (arg === 'off') {
+        antiLinkGroups.delete(from);
+        await sock.sendMessage(from, { text: '❌ Antilink dimatikan.' });
+    } else {
+        await sock.sendMessage(from, { text: '⚠️ Gunakan: *.antilink on* atau *.antilink off*' });
+    }
+    return;
+}
+
+if (text.startsWith('.siapa')) {
+    if (!from.endsWith('@g.us')) {
+        await sock.sendMessage(from, { text: '❌ Perintah hanya bisa digunakan di grup.' });
+        return;
+    }
+
+    const question = text.split(' ').slice(1).join(' ').trim();
+    if (!question) {
+        await sock.sendMessage(from, { text: '⚠️ Gunakan: *.siapa <pertanyaan>*\nContoh: *.siapa paling ganteng?*' });
+        return;
+    }
+
+    try {
+        // Ambil semua member grup
+        const groupMetadata = await sock.groupMetadata(from);
+        const participants = groupMetadata.participants.map(p => p.id);
+
+        if (participants.length === 0) {
+            await sock.sendMessage(from, { text: '❌ Tidak ada member di grup ini.' });
+            return;
+        }
+
+        // Pilih random 1 member
+        const randomUser = participants[Math.floor(Math.random() * participants.length)];
+        const tag = `@${randomUser.split('@')[0]}`;
+
+        await sock.sendMessage(from, {
+            text: `🤔 ${question}\n👉 Jawabannya adalah ${tag}`,
+            mentions: [randomUser]
+        }, { quoted: msg });
+
+        console.log(`🎲 Fitur .siapa → ${tag} dipilih untuk pertanyaan: ${question}`);
+    } catch (err) {
+        console.error('❌ ERROR .siapa:', err.message);
+        await sock.sendMessage(from, { text: '❌ Gagal menjalankan fitur .siapa. Coba lagi nanti.' });
+    }
+    return;
+}
+
+
 if (text.startsWith('.spamcode')) {
   await spamCode(sock, from, msg, text, isOwner);
 }
@@ -3961,7 +4122,7 @@ if (text.trim() === '.menu') {
         '5': '𝟓', '6': '𝟔', '7': '𝟕', '8': '𝟖', '9': '𝟗'
     }[d]));
 
-    const versiFancy = toFancyNumber('1.0.1');
+    const versiFancy = toFancyNumber('1.0.2');
     const tanggalFancy = `${toFancyNumber(tanggal)}-${toFancyNumber(bulan)}-${toFancyNumber(tahun)}`;
    
 
@@ -3996,6 +4157,7 @@ ${readmore}╭─〔 *🤖 ʙᴏᴛ ᴊᴀʀʀ ᴍᴇɴᴜ* 〕─╮
 │ .ganteng @user → Seberapa ganteng?
 │ .jodoh @user @user → Cocoklogi cinta
 │ .cekkhodam @user → Cek khodam 
+│ .siapa <pertanyaan> → Target random
 │
 ├─ 〔 🧠 *ᴀɪ ᴀꜱꜱɪꜱᴛᴀɴᴛ* 〕
 │ .ai <pertanyaan> → Tanya ke AI
@@ -4007,6 +4169,8 @@ ${readmore}╭─〔 *🤖 ʙᴏᴛ ᴊᴀʀʀ ᴍᴇɴᴜ* 〕─╮
 │ .toimg → Ubah stiker jadi gambar
 │ .teks → Beri teks di stiker
 │ .brat → Membuat stiker kata
+│ .img → Menghasilkan gambar
+│ .qr → Membuat QR dari link
 │ .dwfoto → Unduh foto sekali lihat
 │ .dwvideo → Unduh video sekali lihat
 │
@@ -4039,7 +4203,8 @@ ${readmore}╭─〔 *🤖 ʙᴏᴛ ᴊᴀʀʀ ᴍᴇɴᴜ* 〕─╮
 ├─ 〔 👥 *ɢʀᴜᴘ ᴠɪᴘ* 〕
 │ .kick @user → Kick user
 │ .mute @user → Mute user
-│ .unmute @user → Buka mute
+│ .unmute @user → Buka 
+│ .antilink → Menghapus semua link
 │
 ├─ 〔 📊 *ꜱᴋᴏʀ ᴋʜᴜꜱᴜꜱ* 〕
 │ .setskor → Atur skor user
