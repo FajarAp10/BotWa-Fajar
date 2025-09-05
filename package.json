@@ -9,6 +9,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@distube/ytdl-core": "^4.16.12",
     "@google/generative-ai": "^0.24.1",
     "@hapi/boom": "^10.0.1",
     "@napi-rs/canvas": "^0.1.74",
@@ -24,7 +25,8 @@
     "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0",
     "sharp": "^0.32.6",
-    "wa-sticker-formatter": "^4.4.4"
+    "wa-sticker-formatter": "^4.4.4",
+    "ytdl-core": "^4.11.5"
   },
   "overrides": {
     "wa-sticker-formatter": {

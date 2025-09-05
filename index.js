@@ -13,6 +13,7 @@ const qrcode = require('qrcode-terminal');
 const QRCode = require('qrcode'); 
 const { Sticker } = require('wa-sticker-formatter');
 const { exec } = require('child_process');
+const ytdl = require("@distube/ytdl-core");
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
@@ -52,7 +53,17 @@ const waifuAksesSementara = new Map();
 
   const ALIAS_OWNER = {
   '6291100802986027@s.whatsapp.net': OWNER_NUMBER,
-  '91100802986027@s.whatsapp.net': OWNER_NUMBER
+  '91100802986027@s.whatsapp.net': OWNER_NUMBER,
+  '91100802986027@lid': OWNER_NUMBER,      
+  '6291100802986027@c.us': OWNER_NUMBER
+};
+
+// Alias bot (masukkan semua kemungkinan JID bot, termasuk acak di grup)
+const ALIAS_BOT = {
+  [BOT_NUMBER]: BOT_NUMBER,
+  '6281227298109@c.us': BOT_NUMBER,
+  '6281227298109@lid': BOT_NUMBER,
+  '73530494451954@lid': BOT_NUMBER,  // tambahkan JID bot acak di grup
 };
 
 function normalizeJid(jid) {
@@ -269,8 +280,6 @@ function addGroupSkor(jid, roomId, poin) {
     skorUser[roomId][realJid] += poin;
     simpanSkorKeFile();
 }
-
-
 
 
 const bankSoalTeracak = new Map();
@@ -1735,18 +1744,20 @@ if (body.startsWith('.unsetvip') && isGroup) {
 
 // 🔒 KICK – Hanya untuk VIP
 if (text.startsWith('.kick')) {
-    const sender = msg.key.participant || msg.key.remoteJid;
-    const BOT_NUMBER = '62882007141574@s.whatsapp.net'; // Nomor bot
+
+     const sender = normalizeJid(msg.key.participant || msg.key.remoteJid);
+
 
     if (!from.endsWith('@g.us')) {
         await sock.sendMessage(from, { text: '❌ Perintah hanya bisa digunakan di grup.' });
         return;
     }
 
-    if (!isVIP(sender) && !hasTemporaryFeature(sender, 'kick')) {
-    await sock.sendMessage(from, { text: '🔐 Perintah ini hanya bisa digunakan oleh VIP atau beli.' });
-    return;
-}
+    if (!isVIP(sender, from) && !hasTemporaryFeature(sender, 'kick')) {
+        await sock.sendMessage(from, { text: '🔐 Perintah ini hanya bisa digunakan oleh VIP atau beli.' });
+        return;
+    }
+
 
 
     const quotedMsg = msg.message?.extendedTextMessage?.contextInfo;
@@ -1761,21 +1772,22 @@ if (text.startsWith('.kick')) {
     }
 
     for (const target of mentionedJid) {
-        if (target === BOT_NUMBER) {
-            await sock.sendMessage(from, {
-                text: '🤖 Bot tidak bisa mengeluarkan dirinya sendiri.',
-                mentions: [target]
-            });
-            continue;
-        }
+        if (ALIAS_BOT[target]) {
+        await sock.sendMessage(from, {
+            text: '🤖 Bot tidak bisa mengeluarkan dirinya sendiri.',
+            mentions: [target]
+        });
+        continue;
+    }
 
-        if (target === OWNER_NUMBER) {
-            await sock.sendMessage(from, {
-                text: '👑 Tidak bisa mengeluarkan Owner!',
-                mentions: [target]
-            });
-            continue;
-        }
+    if (ALIAS_OWNER[target]) {
+        await sock.sendMessage(from, {
+            text: '👑 Tidak bisa mengeluarkan Owner!',
+            mentions: [target]
+        });
+        continue;
+    }
+
 
         try {
             await sock.groupParticipantsUpdate(from, [target], 'remove');
@@ -1863,12 +1875,12 @@ if (text.startsWith('.mute')) {
         return;
     }
 
-    if ([OWNER_NUMBER, BOT_NUMBER].includes(mentionedJid)) {
-        await sock.sendMessage(from, {
-            text: '❌ Tidak bisa mute Owner atau Bot.'
-        });
-        return;
-    }
+   if (ALIAS_OWNER[mentionedJid] || ALIAS_BOT[mentionedJid]) {
+    await sock.sendMessage(from, {
+        text: '❌ Tidak bisa mute Owner atau Bot.'
+    });
+    return;
+}
 
     // ✅ Panggil fungsi yang kamu buat
     muteUser(mentionedJid, from);
@@ -2095,7 +2107,6 @@ if (msg.message?.extendedTextMessage?.contextInfo?.stanzaId) {
         return;
     }
 }
-
 if (text === '.family100') {
     if (sesiFamily100.has(from)) {
         await sock.sendMessage(from, {
@@ -2113,24 +2124,26 @@ if (text === '.family100') {
 
     const timeout = setTimeout(async () => {
         const sesi = sesiFamily100.get(from);
+        if (!sesi) return;
+
         const jawabanBenar = soalFamily100.find(s => s.pertanyaan === sesi.pertanyaan).jawaban;
 
         const jawabanAkhir = jawabanBenar.map((j, i) => {
             const user = sesi.jawabanLolos[i];
             if (user) {
-                return `*${i + 1}.* ✅ ${j} (@${user})`;
+                return `*${i + 1}.* ✅ ${j} (@${user.split('@')[0]})`;
             } else {
                 return `*${i + 1}.* ❌ ${j}`;
             }
         }).join("\n");
 
         await sock.sendMessage(from, {
-            text: `⏱️ *Waktu Habis!*\n🎉 *Family 100 Selesai!*\n━━━━━━━━━\n🧠 *Pertanyaan:*\n${soal.pertanyaan}\n\n📋 *Jawaban Lengkap:*\n${jawabanAkhir}\n\n🎊 *Terima kasih telah bermain!*`,
-            mentions: sesi.jawabanLolos.filter(Boolean).map(u => u + '@s.whatsapp.net')
+            text: `⏱️ *Waktu Habis!*\n🎉 *Family 100 Selesai!*\n━━━━━━━━━\n🧠 *Pertanyaan:*\n${sesi.pertanyaan}\n\n📋 *Jawaban Lengkap:*\n${jawabanAkhir}\n\n🎊 Terima kasih telah bermain!`,
+            mentions: sesi.jawabanLolos.filter(Boolean)
         });
 
         sesiFamily100.delete(from);
-    }, 60000); // 30 detik
+    }, 60000);
 
     sesiFamily100.set(from, {
         pesanId: sent.key.id,
@@ -2143,30 +2156,32 @@ if (text === '.family100') {
     return;
 }
 
-// Tangani jawaban
+// 🔹 Tangani jawaban
 if (msg.message?.extendedTextMessage?.contextInfo?.stanzaId) {
     const sesi = sesiFamily100.get(from);
     if (sesi && msg.message.extendedTextMessage.contextInfo.stanzaId === sesi.pesanId) {
         const userJawab = text.trim().toLowerCase();
         const sender = msg.key.participant || msg.key.remoteJid;
-        const userTag = sender.split('@')[0];
 
         const index = soalFamily100.find(s => s.pertanyaan === sesi.pertanyaan)
             .jawaban.findIndex(j => j.toLowerCase() === userJawab);
 
         if (index !== -1 && !sesi.jawaban[index]) {
-    sesi.jawaban[index] = soalFamily100.find(s => s.pertanyaan === sesi.pertanyaan).jawaban[index];
-    sesi.jawabanLolos[index] = userTag;
+            sesi.jawaban[index] = soalFamily100.find(s => s.pertanyaan === sesi.pertanyaan).jawaban[index];
+            sesi.jawabanLolos[index] = sender; // simpan full JID
 
-    tambahSkor(sender, from, 20); // ✅ Tambahkan poin 5 jika benar
+            tambahSkor(sender, from, 20);
 
-    const isi = sesi.jawaban.map((j, i) => {
-        return `*${i + 1}.* ${j ? `✅ ${j} (@${sesi.jawabanLolos[i]})` : ''}`;
-    }).join("\n");
-
+            const isi = sesi.jawaban.map((j, i) => {
+                if (j) {
+                    return `*${i + 1}.* ✅ ${j} (@${sesi.jawabanLolos[i].split('@')[0]})`;
+                } else {
+                    return `*${i + 1}.*`;
+                }
+            }).join("\n");
 
             await sock.sendMessage(from, {
-                text: `🎮 *Jawaban Diterima!*\n━━━━━━━━━\n🧠 *Pertanyaan:* ${sesi.pertanyaan}\n\n📋 *Jawaban Saat Ini:*\n${isi}\n\n✅ *Jawaban "${userJawab}" benar!*\n🎁 +20 poin untuk @${userTag}\n↩️ Balas pesan ini untuk menjawab.`,
+                text: `🎮 *Jawaban Diterima!*\n━━━━━━━━━\n🧠 *Pertanyaan:* ${sesi.pertanyaan}\n\n📋 *Jawaban Saat Ini:*\n${isi}\n\n✅ *Jawaban "${userJawab}" benar!*\n🎁 +20 poin untuk @${sender.split('@')[0]}\n↩️ Balas pesan ini untuk menjawab.`,
                 mentions: [sender]
             });
 
@@ -2179,7 +2194,7 @@ if (msg.message?.extendedTextMessage?.contextInfo?.stanzaId) {
             }
         } else {
             const isi = sesi.jawaban.map((j, i) => {
-                return `*${i + 1}.* ${j ? `${j} (@${sesi.jawabanLolos[i]})` : ''}`;
+                return `*${i + 1}.* ${j ? `${j} (@${sesi.jawabanLolos[i].split('@')[0]})` : ''}`;
             }).join("\n");
 
             await sock.sendMessage(from, {
@@ -2315,93 +2330,85 @@ if (text.startsWith('.ttmp3')) {
     return;
 }
 
+
+
 if (text.startsWith('.ytmp3')) {
-  const ytUrl = text.split(' ')[1];
-  if (!ytUrl || (!ytUrl.includes('youtube.com') && !ytUrl.includes('youtu.be'))) {
-    await sock.sendMessage(from, {
-      text: "❌ Link YouTube tidak valid.\nGunakan: *.ytmp3 <link YouTube>*"
-    }, { quoted: msg });
-    return;
-  }
+    const url = text.split(' ')[1];
+    if (!url) {
+        await sock.sendMessage(from, { text: '❗ Masukkan link YouTube\nContoh: *.ytmp3 https://youtu.be/xxxx*' });
+        return;
+    }
 
-  await sock.sendMessage(from, {
-    react: { text: '⏳', key: msg.key }
-  });
+    // kasih reaction ⏳
+    await sock.sendMessage(from, { react: { text: '⏳', key: msg.key } });
 
-  try {
-    const apiRes = await axios.get('https://api.nekorinn.my.id/downloader/youtube', {
-      params: { url: ytUrl, type: 'audio', format: '64' }
-      
-    });
+    try {
+        // ambil info video
+        const info = await ytdl.getInfo(url);
+        const title = info.videoDetails.title;
 
-    const audioUrl = apiRes.data?.result?.downloadUrl;
-    if (!audioUrl) throw new Error('Audio tidak tersedia dari API.');
+        // download langsung ke buffer (audio only)
+        const stream = ytdl(url, { filter: 'audioonly', quality: 'highestaudio' });
+        let chunks = [];
+        for await (const chunk of stream) {
+            chunks.push(chunk);
+        }
+        const buffer = Buffer.concat(chunks);
 
-    const audioRes = await axios.get(audioUrl, { responseType: 'arraybuffer' });
-    const audioBuffer = Buffer.from(audioRes.data, 'binary');
+        // kirim audio ke WhatsApp (bisa langsung diputar)
+        await sock.sendMessage(from, {
+            audio: buffer,
+            mimetype: 'audio/mpeg',
+            ptt: false // true = jadi VN (voice note style), false = audio biasa
+        }, { quoted: msg });
 
-    await sock.sendMessage(from, {
-      audio: audioBuffer,
-      mimetype: 'audio/mpeg',
-      ptt: false
-    }, { quoted: msg });
+        // ganti reaction jadi ✅
+        await sock.sendMessage(from, { react: { text: '✅', key: msg.key } });
 
-    await sock.sendMessage(from, {
-      react: { text: '✅', key: msg.key }
-    });
-
-  } catch (err) {
-    console.error('❌ ERROR YTMP3:', err.message);
-    await sock.sendMessage(from, {
-      text: "❌ Gagal mengunduh audio YouTube. Coba link lain atau nanti lagi."
-    }, { quoted: msg });
-  }
+    } catch (err) {
+        console.error('Error .ytmp3:', err);
+        await sock.sendMessage(from, { react: { text: '❌', key: msg.key } });
+        await sock.sendMessage(from, { text: '❌ Gagal download audio.' }, { quoted: msg });
+    }
 }
-
 if (text.startsWith('.ytmp4')) {
-  const ytUrl = text.split(' ')[1];
-  const senderNumber = sender.split('@')[0];
-  const userTag = `@${senderNumber}`;
+    const url = text.split(' ')[1];
+    if (!url) {
+        await sock.sendMessage(from, { text: '❗ Masukkan link YouTube\nContoh: *.ytmp4 https://youtu.be/xxxx*' });
+        return;
+    }
 
-  if (!ytUrl || (!ytUrl.includes('youtube.com') && !ytUrl.includes('youtu.be'))) {
-    await sock.sendMessage(from, {
-      text: "❌ Link YouTube tidak valid.\nGunakan: *.ytmp4 <link YouTube>*"
-    }, { quoted: msg });
-    return;
-  }
+    // kasih reaction ⏳
+    await sock.sendMessage(from, { react: { text: '⏳', key: msg.key } });
 
-  await sock.sendMessage(from, {
-    react: { text: '⏳', key: msg.key }
-  });
+    try {
+        // ambil info video
+        const info = await ytdl.getInfo(url);
+        const title = info.videoDetails.title;
 
-  try {
-    const apiRes = await axios.get('https://api.nekorinn.my.id/downloader/youtube', {
-      params: { url: ytUrl, type: 'video', format: '360' }
-    });
+        // download video (video+audio, kualitas sedang biar ga lama)
+        const stream = ytdl(url, { quality: '18' }); // 18 = mp4 360p (cukup cepat)
+        let chunks = [];
+        for await (const chunk of stream) {
+            chunks.push(chunk);
+        }
+        const buffer = Buffer.concat(chunks);
 
-    const videoUrl = apiRes.data?.result?.downloadUrl;
-    if (!videoUrl) throw new Error('Video tidak tersedia dari API.');
+        // kirim ke WhatsApp sebagai video
+        await sock.sendMessage(from, {
+            video: buffer,
+            mimetype: 'video/mp4',
+            caption: `🎬 ${title}`
+        }, { quoted: msg });
 
-    const videoRes = await axios.get(videoUrl, { responseType: 'arraybuffer' });
-    const videoBuffer = Buffer.from(videoRes.data, 'binary');
+        // ganti reaction jadi ✅
+        await sock.sendMessage(from, { react: { text: '✅', key: msg.key } });
 
-    await sock.sendMessage(from, {
-      video: videoBuffer,
-      mimetype: 'video/mp4',
-      caption: `🎬 Video untuk ${userTag}`,
-      contextInfo: { mentionedJid: [sender] }
-    }, { quoted: msg });
-
-    await sock.sendMessage(from, {
-      react: { text: '✅', key: msg.key }
-    });
-
-  } catch (err) {
-    console.error('❌ ERROR YTMP4:', err.message);
-    await sock.sendMessage(from, {
-      text: "❌ Gagal mengunduh video YouTube. Coba link lain atau nanti lagi."
-    }, { quoted: msg });
-  }
+    } catch (err) {
+        console.error('Error .ytmp4:', err);
+        await sock.sendMessage(from, { react: { text: '❌', key: msg.key } });
+        await sock.sendMessage(from, { text: '❌ Gagal download video.' }, { quoted: msg });
+    }
 }
 
 
@@ -2924,12 +2931,18 @@ if (text.startsWith('.kirimskor')) {
     if (!skorUser[from][pengirim]) skorUser[from][pengirim] = 0;
     if (!skorUser[from][target]) skorUser[from][target] = 0;
 
+    const realPengirim = normalizeJid(pengirim);
+
+// Kalau bukan Owner, cek skor
+if (!isOwner(realPengirim)) {
     if (skorUser[from][pengirim] < jumlah) {
         await sock.sendMessage(from, {
             text: `Skormu tidak cukup!\n💰 Skor kamu: *${skorUser[from][pengirim]}*`
         });
         return;
     }
+}
+
 
 skorUser[from][pengirim] -= jumlah;
 skorUser[from][target] += jumlah;
@@ -4053,6 +4066,159 @@ if (text.startsWith('.siapa')) {
 if (text.startsWith('.spamcode')) {
   await spamCode(sock, from, msg, text, isOwner);
 }
+// 📝 SET NAMA GRUP – Semua member bisa
+if (text.startsWith('.setnamagc')) {
+    if (!from.endsWith('@g.us')) {
+        await sock.sendMessage(from, { text: '❌ Perintah ini hanya bisa digunakan di grup.' });
+        return;
+    }
+
+    const newName = text.replace('.setnamagc', '').trim();
+    if (!newName) {
+        await sock.sendMessage(from, { text: '❗ Masukkan nama baru grup.\nContoh: *.setnamagc NamaBaru*' });
+        return;
+    }
+
+    await sock.sendMessage(from, { react: { text: '⏳', key: msg.key } });
+
+    try {
+        await sock.groupUpdateSubject(from, newName);
+        await sock.sendMessage(from, { react: { text: '✅', key: msg.key } });
+    } catch (err) {
+        console.error('❌ Gagal ganti nama grup:', err);
+        await sock.sendMessage(from, { react: { text: '❌', key: msg.key } });
+    }
+}
+
+// 🔒 SET DESKRIPSI GRUP – Semua member bisa
+if (text.startsWith('.setdesgc')) {
+    if (!from.endsWith('@g.us')) {
+        await sock.sendMessage(from, { text: '❌ Perintah hanya bisa digunakan di grup.' });
+        return;
+    }
+
+    const newDesc = text.replace('.setdesgc', '').trim();
+    if (!newDesc) {
+        await sock.sendMessage(from, { text: '⚠️ Masukkan deskripsi grup baru.\nContoh: *.setdesgc Grup Santuy Only*' });
+        return;
+    }
+
+    await sock.sendMessage(from, { react: { text: '⏳', key: msg.key } });
+
+    try {
+        await sock.groupUpdateDescription(from, newDesc);
+        await sock.sendMessage(from, { react: { text: '✅', key: msg.key } });
+    } catch (err) {
+        console.error('❌ Gagal ganti deskripsi grup:', err);
+        await sock.sendMessage(from, { react: { text: '❌', key: msg.key } });
+    }
+}
+
+// 🖼️ SET FOTO PROFIL GRUP – Semua member bisa
+if (text.startsWith('.setppgc')) {
+    if (!from.endsWith('@g.us')) {
+        await sock.sendMessage(from, { text: '❌ Perintah ini hanya bisa digunakan di grup.' });
+        return;
+    }
+
+    await sock.sendMessage(from, { react: { text: '⏳', key: msg.key } });
+
+    try {
+        let imageMessage;
+
+        // 1. Kalau pesan user ada gambar + caption
+        if (msg.message?.imageMessage) {
+            imageMessage = msg.message.imageMessage;
+        } 
+        // 2. Kalau user reply ke gambar
+        else if (msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage) {
+            imageMessage = msg.message.extendedTextMessage.contextInfo.quotedMessage.imageMessage;
+        }
+
+        if (!imageMessage) {
+            await sock.sendMessage(from, { react: { text: '❌', key: msg.key } });
+            await sock.sendMessage(from, { text: '❗ Kirim atau reply gambar dengan caption *.setppgc*' });
+            return;
+        }
+
+        const buffer = await downloadMediaMessage(
+            { message: { imageMessage } },
+            "buffer",
+            {}
+        );
+
+        await sock.updateProfilePicture(from, buffer);
+
+        await sock.sendMessage(from, { react: { text: '✅', key: msg.key } });
+
+    } catch (err) {
+        console.error('❌ Gagal ganti foto profil grup:', err);
+        await sock.sendMessage(from, { react: { text: '❌', key: msg.key } });
+    }
+}
+
+// 🔒 ADMIN ONLY ON/OFF – Semua bisa akses
+if (text.startsWith('.adminonly')) {
+    if (!from.endsWith('@g.us')) {
+        await sock.sendMessage(from, { text: '❌ Perintah ini hanya bisa digunakan di grup.' });
+        return;
+    }
+
+    const arg = text.replace('.adminonly', '').trim().toLowerCase();
+
+    if (arg === 'on') {
+        // kasih reaction ⏳
+        await sock.sendMessage(from, { react: { text: '⏳', key: msg.key } });
+
+        try {
+            await sock.groupSettingUpdate(from, 'announcement'); // hanya admin bisa chat
+            await sock.sendMessage(from, { react: { text: '✅', key: msg.key } });
+        } catch (err) {
+            console.error('Gagal adminonly on:', err);
+            await sock.sendMessage(from, { react: { text: '❌', key: msg.key } });
+        }
+    } else if (arg === 'off') {
+        // kasih reaction ⏳
+        await sock.sendMessage(from, { react: { text: '⏳', key: msg.key } });
+
+        try {
+            await sock.groupSettingUpdate(from, 'not_announcement'); // semua member bisa chat
+            await sock.sendMessage(from, { react: { text: '✅', key: msg.key } });
+        } catch (err) {
+            console.error('Gagal adminonly off:', err);
+            await sock.sendMessage(from, { react: { text: '❌', key: msg.key } });
+        }
+    } else {
+        await sock.sendMessage(from, { text: '⚙️ Gunakan: *.adminonly on* atau *.adminonly off*' });
+    }
+}
+
+// 🌐 LINK GRUP – Semua bisa akses
+if (text === '.linkgc') {
+    if (!from.endsWith('@g.us')) {
+        await sock.sendMessage(from, { text: '❌ Perintah ini hanya bisa digunakan di grup.' });
+        return;
+    }
+
+    // kasih reaction ⏳ dulu
+    await sock.sendMessage(from, { react: { text: '⏳', key: msg.key } });
+
+    try {
+        const code = await sock.groupInviteCode(from);
+        const link = `https://chat.whatsapp.com/${code}`;
+
+        // ganti reaction jadi ✅
+        await sock.sendMessage(from, { react: { text: '✅', key: msg.key } });
+
+        // kirim link grup
+        await sock.sendMessage(from, { text: `🔗 *Link Grup:*\n${link}` });
+    } catch (err) {
+        console.error('❌ Gagal ambil link grup:', err);
+
+        // ganti reaction jadi ❌
+        await sock.sendMessage(from, { react: { text: '❌', key: msg.key } });
+    }
+}
 
 
 if (text.trim() === '.info') {
@@ -4151,13 +4317,13 @@ ${readmore}╭─〔 *🤖 ʙᴏᴛ ᴊᴀʀʀ ᴍᴇɴᴜ* 〕─╮
 │ .family100 → Jawaban terbanyak
 │
 ├─ 〔 🏳️‍🌈 *ꜰɪᴛᴜʀ ʟᴜᴄᴜ* 〕
-│ .gay @user → Seberapa gay?
-│ .lesbi @user → Seberapa lesbi?
-│ .cantik @user → Seberapa cantik?
-│ .ganteng @user → Seberapa ganteng?
-│ .jodoh @user @user → Cocoklogi cinta
-│ .cekkhodam @user → Cek khodam 
-│ .siapa <pertanyaan> → Target random
+│ .gay → Seberapa gay?
+│ .lesbi → Seberapa lesbi?
+│ .cantik → Seberapa cantik?
+│ .ganteng → Seberapa ganteng?
+│ .jodoh → Cocoklogi cinta
+│ .cekkhodam → Cek khodam 
+│ .siapa → Target random
 │
 ├─ 〔 🧠 *ᴀɪ ᴀꜱꜱɪꜱᴛᴀɴᴛ* 〕
 │ .ai <pertanyaan> → Tanya ke AI
@@ -4182,6 +4348,11 @@ ${readmore}╭─〔 *🤖 ʙᴏᴛ ᴊᴀʀʀ ᴍᴇɴᴜ* 〕─╮
 │
 ├─ 〔 👥 *ꜰɪᴛᴜʀ ɢʀᴜᴘ* 〕
 │ .tagall → Mention semua member
+│ .setnamagc → Ganti nama grup
+│ .setdesgc → Ganti deskripsi grup
+│ .setppgc → Ganti foto profil grup
+│ .adminonly → Setting pengaturan grup
+│ .linkgc → Ambil link grup
 │
 ├─ 〔 📊 *ꜱᴋᴏʀ ɢᴀᴍᴇ* 〕
 │ .skor → Lihat skor kamu
@@ -4201,18 +4372,18 @@ ${readmore}╭─〔 *🤖 ʙᴏᴛ ᴊᴀʀʀ ᴍᴇɴᴜ* 〕─╮
 ╭─〔 *🔐 ꜰɪᴛᴜʀ ᴠɪᴘ / ᴏᴡɴᴇʀ* 〕─╮
 │
 ├─ 〔 👥 *ɢʀᴜᴘ ᴠɪᴘ* 〕
-│ .kick @user → Kick user
-│ .mute @user → Mute user
-│ .unmute @user → Buka 
-│ .antilink → Menghapus semua link
+│ .kick → Kick user
+│ .mute → Mute user
+│ .unmute → Buka mute
+│ .antilink → Dilarang mengirim link
 │
 ├─ 〔 📊 *ꜱᴋᴏʀ ᴋʜᴜꜱᴜꜱ* 〕
 │ .setskor → Atur skor user
 │ .allskor → Kirim skor ke semua
 │
 ├─ 〔 👑 *ᴠɪᴘ ᴄᴏɴᴛʀᴏʟ* 〕
-│ .setvip @user → Jadikan VIP
-│ .unsetvip @user → Cabut VIP
+│ .setvip → Jadikan VIP
+│ .unsetvip → Cabut VIP
 │ .listvip → Daftar VIP
 │ .listskor → Daftar SKOR
 │
